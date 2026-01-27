@@ -137,8 +137,9 @@ const App: React.FC = () => {
     const finalNumQuestao = isPro ? numQuestao : 3;
     try {
       const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
-      if (data.questions.length === 0) { setIsNotFound(true); } 
-      else {
+      if (!data || !data.questions || data.questions.length === 0) { 
+        setIsNotFound(true); 
+      } else {
         setExam({ 
           title: `Simulado: ${concurso}`, 
           questions: data.questions, 
@@ -149,8 +150,12 @@ const App: React.FC = () => {
         });
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
-    } catch (error) { setIsNotFound(true); } 
-    finally { setIsLoading(false); }
+    } catch (error) { 
+      console.error("Erro na geração:", error);
+      setIsNotFound(true); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const handleGenerateSubject = async (materia: string, modelo: ModeloQuestao, numQuestao: number, banca: string) => {
@@ -163,8 +168,9 @@ const App: React.FC = () => {
     const finalNumQuestao = isPro ? numQuestao : 3;
     try {
       const data = await generateSubjectQuestions(materia, modelo, finalNumQuestao, banca);
-      if (data.questions.length === 0) { setIsNotFound(true); } 
-      else {
+      if (!data || !data.questions || data.questions.length === 0) { 
+        setIsNotFound(true); 
+      } else {
         setExam({ 
           title: `Simulado: ${materia}`, 
           questions: data.questions, 
@@ -174,8 +180,12 @@ const App: React.FC = () => {
         });
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
-    } catch (error) { setIsNotFound(true); } 
-    finally { setIsLoading(false); }
+    } catch (error) { 
+      console.error("Erro na geração de matéria:", error);
+      setIsNotFound(true); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const handleCorrection = () => {
@@ -234,7 +244,7 @@ const App: React.FC = () => {
           </p>
           <div className="space-y-4">
             <button onClick={() => { handleViewChange('planos'); }} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3">
-              LIBERAR ACESGO AGORA
+              LIBERAR ACESSO AGORA
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
             <button onClick={() => setProWallFeature(null)} className="w-full text-slate-400 font-black text-xs uppercase tracking-[0.2em] py-2 hover:text-slate-600 transition-colors">
@@ -411,10 +421,10 @@ const App: React.FC = () => {
         {isNotFound && !isLoading && (
           <div className="text-center py-20 bg-white rounded-[2rem] border border-red-50 shadow-xl max-w-lg mx-auto">
              <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
              </div>
              <h4 className="text-xl font-black text-gray-900 mb-2">Nenhum resultado</h4>
-             <p className="text-gray-400 mb-8 font-medium px-10 text-sm">Não localizamos questões suficientes para este termo.</p>
+             <p className="text-gray-400 mb-8 font-medium px-10 text-sm">Não localizamos questões suficientes para este termo ou sua chave API restringiu a busca. Tente novamente.</p>
              <button onClick={() => setIsNotFound(false)} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest">Tentar Novamente</button>
           </div>
         )}
