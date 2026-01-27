@@ -95,7 +95,20 @@ export interface PredictedConcurso {
   status: string;
 }
 
-export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth';
+export interface ThermometerData {
+  concurso: string;
+  banca: string;
+  subjects: {
+    name: string;
+    frequency: number; // 0-100
+    heatLevel: 'High' | 'Medium' | 'Low';
+    description: string;
+  }[];
+  analysis: string;
+  topQuestions?: Question[];
+}
+
+export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro';
 
 export interface UserPlan {
   isPro: boolean;

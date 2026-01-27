@@ -4,6 +4,7 @@ import Header from './components/Header';
 import LandingPage from './components/LandingPage';
 import ExamForm from './components/ExamForm';
 import SimuladosMateriasForm from './components/SimuladosMateriasForm';
+import ThermometerView from './components/ThermometerView';
 import QuestionItem from './components/QuestionItem';
 import StudyMaterial from './components/StudyMaterial';
 import PredictedConcursos from './components/PredictedConcursos';
@@ -50,11 +51,11 @@ const App: React.FC = () => {
 
   const handleViewChange = (newView: AppView) => {
     const isPro = currentUser?.isPro || false;
-    if (newView === 'material' && !isPro) {
-      setProWallFeature("gerar cronogramas táticos e personalizados de estudo");
+    if ((newView === 'material' || newView === 'termometro') && !isPro) {
+      setProWallFeature(newView === 'material' ? "gerar cronogramas táticos e personalizados de estudo" : "acessar o termômetro de recorrência de questões");
       return; 
     }
-    const resetViews: AppView[] = ['home', 'simulado', 'materias', 'material', 'previstos', 'perfil', 'historico', 'auth'];
+    const resetViews: AppView[] = ['home', 'simulado', 'materias', 'material', 'previstos', 'perfil', 'historico', 'auth', 'termometro'];
     if (resetViews.includes(newView)) {
       setExam(null);
       setIsCorrected(false);
@@ -188,6 +189,39 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGenerateFromThermometer = async (concurso: string, subjects: string[], banca: string) => {
+    setIsLoading(true);
+    setIsNotFound(false);
+    setExam(null);
+    setUserAnswers({});
+    setIsCorrected(false);
+    
+    // Forçar a visão para 'simulado' para que o usuário veja o carregamento e o resultado no local correto
+    setView('simulado');
+    
+    const combinedQuery = `${concurso} - Foco em: ${subjects.join(', ')}`;
+    try {
+      const data = await generateExamQuestions(Modalidade.NACIONAL, combinedQuery, ModeloQuestao.MULTIPLA_ESCOLHA, 10, banca);
+      if (!data || !data.questions || data.questions.length === 0) {
+        setIsNotFound(true);
+      } else {
+        setExam({
+          title: `Simulado Tático: ${concurso}`,
+          questions: data.questions,
+          passage: data.passage,
+          concurso,
+          sources: data.sources
+        });
+        setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+      }
+    } catch (error) {
+      console.error(error);
+      setIsNotFound(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCorrection = () => {
     if (!exam) return;
     setIsCorrected(true);
@@ -292,6 +326,16 @@ const App: React.FC = () => {
           onUpgrade={() => handleViewChange('planos')} 
           onSavePlan={handleSaveStudyPlan}
           isLoggedIn={!!currentUser}
+        />
+      );
+    }
+    if (view === 'termometro') {
+      return (
+        <ThermometerView 
+          userPlan={userPlan} 
+          onUpgrade={() => handleViewChange('planos')} 
+          onGenerateExam={handleGenerateFromThermometer}
+          onShowProWall={setProWallFeature}
         />
       );
     }
