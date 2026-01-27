@@ -6,9 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Concurseiro Pro</title>
     
-    <!-- Shim Crítico para evitar erro de 'process is not defined' -->
+    <!-- Shim Crítico para evitar erro de 'process is not defined' em navegadores -->
     <script>
-      window.process = { env: { API_KEY: "" } };
+      // Inicializa process.env de forma segura sem clobbering (sobrescrita)
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      // A chave API_KEY será injetada automaticamente pelo ambiente
     </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -35,7 +38,7 @@
     "react/": "https://esm.sh/react@19.0.0/",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
-    "@google/genai": "https://esm.sh/@google/genai"
+    "@google/genai": "https://esm.sh/@google/genai@1.35.0"
   }
 }
 </script>
