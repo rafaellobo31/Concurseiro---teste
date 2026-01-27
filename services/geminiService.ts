@@ -1,9 +1,12 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Modalidade, ModeloQuestao, Question, StudyGuide, PredictedConcurso, StudyPlan, GroundingSource } from "../types";
+import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, GroundingSource } from "../types";
 
-// Inicialização centralizada utilizando a variável de ambiente padrão.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Initialize the Google GenAI client using the API key from environment variables.
+ * Following strict guidelines: new GoogleGenAI({ apiKey: process.env.API_KEY })
+ */
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 interface GeneratedExamData {
   questions: Question[];
@@ -33,7 +36,7 @@ export async function generateExamQuestions(
     ${bancaPreferencia ? `- Prioridade de Banca: ${bancaPreferencia}.` : ''}
   `;
 
-  // Usamos Gemini 3 Pro para garantir a veracidade histórica das questões
+  // Using gemini-3-pro-preview for complex reasoning task (Brazilian Civil Service Exams)
   return executeGeneration(prompt, numQuestao, true, 'gemini-3-pro-preview');
 }
 
@@ -46,10 +49,12 @@ export async function generateSubjectQuestions(
   const isReadingComp = materia.toLowerCase().includes('interpretação');
   const prompt = `Gere EXATAMENTE ${numQuestao} questões REAIS de concursos anteriores da matéria: "${materia}". Banca: "${banca || 'Diversas'}". Modelo: ${modelo}.`;
 
+  // Using gemini-3-flash-preview for standard question retrieval task
   return executeGeneration(prompt, numQuestao, isReadingComp, 'gemini-3-flash-preview');
 }
 
 async function executeGeneration(prompt: string, numQuestao: number, useSearch: boolean, modelName: string): Promise<GeneratedExamData> {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: modelName,
     contents: prompt,
@@ -84,6 +89,7 @@ async function executeGeneration(prompt: string, numQuestao: number, useSearch: 
   });
 
   const sources: GroundingSource[] = [];
+  // Extracting URLs from groundingChunks as per Search Grounding guidelines
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
   if (chunks) {
     chunks.forEach((chunk: any) => {
@@ -114,6 +120,7 @@ export async function generateStudyPlan(
   daysPerWeek: number, 
   hoursPerDay: number
 ): Promise<StudyPlan> {
+  const ai = getAI();
   const prompt = `Crie um Plano de Estudo Estratégico para o concurso: "${institution}". Considere um cronograma de ${months} meses, estudando ${daysPerWeek} dias por semana, ${hoursPerDay} horas por dia.`;
   
   const response = await ai.models.generateContent({
@@ -148,6 +155,7 @@ export async function generateStudyPlan(
   });
 
   const sources: GroundingSource[] = [];
+  // Extracting URLs from groundingChunks as per Search Grounding guidelines
   response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => {
     if (c.web?.uri) sources.push({ title: c.web.title, uri: c.web.uri });
   });
@@ -164,6 +172,7 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
+  const ai = getAI();
   const prompt = `Liste os 12 concursos MAIS AGUARDADOS e confirmados no Brasil. Retorne apenas concursos reais com status atualizado.`;
   
   const response = await ai.models.generateContent({
@@ -197,6 +206,7 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
+  const ai = getAI();
   const prompt = `Liste os 20 concursos mais buscados da modalidade ${modalidade} no Brasil atualmente.`;
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
