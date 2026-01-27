@@ -8,8 +8,8 @@ import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, Grou
  */
 const getAI = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("ERRO: API_KEY não encontrada em process.env.");
+  if (!apiKey || apiKey === "") {
+    console.warn("API_KEY não detectada em process.env. Verifique as variáveis de ambiente.");
   }
   return new GoogleGenAI({ apiKey: apiKey || '' });
 };
@@ -18,6 +18,42 @@ interface GeneratedExamData {
   questions: Question[];
   passage?: string;
   sources?: GroundingSource[];
+}
+
+/**
+ * Tenta extrair um JSON válido de uma string, limpando lixo de texto ou markdown.
+ */
+function extractJSON(text: string) {
+  if (!text) return null;
+  try {
+    // Tenta o parse direto
+    return JSON.parse(text);
+  } catch (e) {
+    // Procura por blocos de código markdown ```json ... ```
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch (e2) {}
+    }
+    
+    // Fallback: Localiza o primeiro '{' ou '[' e o último '}' ou ']'
+    const startObj = text.indexOf('{');
+    const startArr = text.indexOf('[');
+    const start = (startArr !== -1 && (startObj === -1 || startArr < startObj)) ? startArr : startObj;
+    
+    const endObj = text.lastIndexOf('}');
+    const endArr = text.lastIndexOf(']');
+    const end = (endArr !== -1 && (endObj === -1 || endArr > endObj)) ? endArr : endObj;
+
+    if (start !== -1 && end !== -1) {
+      try {
+        const potentialJSON = text.substring(start, end + 1);
+        return JSON.parse(potentialJSON);
+      } catch (e3) {}
+    }
+  }
+  return null;
 }
 
 /**
@@ -34,19 +70,17 @@ export async function generateExamQuestions(
 ): Promise<GeneratedExamData> {
   const prompt = `
     Gere EXATAMENTE ${numQuestao} questões de concursos REAIS para o órgão: "${concurso}".
-    Use a busca para localizar provas anteriores, editais e cadernos de questões reais.
+    Use a busca do Google para encontrar provas anteriores, editais e cadernos de questões.
     
-    RESTRIÇÕES TÉCNICAS:
-    - Se houver um texto base comum (passage) para as questões, inclua-o no campo "passage".
-    - Estado de aplicação: ${estado || 'Qualquer estado do Brasil'}.
-    - Modelo de resposta: ${modelo}.
-    - Prioridade de Banca: ${bancaPreferencia || 'Banca oficial do último concurso'}.
-    - As questões devem ser de nível superior ou médio conforme o padrão do órgão.
-    - Se não encontrar a questão exata, use os tópicos do edital encontrados na busca para criar questões INÉDITAS no exato estilo da banca mencionada.
+    REGRAS CRÍTICAS:
+    1. Se encontrar um texto base comum, inclua no campo "passage".
+    2. Respeite o Estado: ${estado || 'Brasil'}.
+    3. Respeite o Modelo: ${modelo}.
+    4. Respeite a Banca: ${bancaPreferencia || 'Banca oficial do último concurso'}.
+    5. IMPORTANTE: Se não encontrar a questão exata na busca, crie questões INÉDITAS rigorosamente baseadas no último edital deste órgão e no estilo da banca.
   `;
 
-  // Tarefa complexa de análise de edital e busca requer gemini-3-pro-preview com thinking
-  return executeGeneration(prompt, numQuestao, true, 'gemini-3-pro-preview', 32768);
+  return executeGeneration(prompt, numQuestao, true, 'gemini-3-flash-preview');
 }
 
 /**
@@ -58,25 +92,18 @@ export async function generateSubjectQuestions(
   numQuestao: number,
   banca: string
 ): Promise<GeneratedExamData> {
-  const prompt = `
-    Gere EXATAMENTE ${numQuestao} questões de concursos anteriores da matéria: "${materia}". 
-    Banca de preferência: "${banca || 'Diversas (FGV, Cebraspe, FCC)'}". 
-    Modelo: ${modelo}.
-    Foque em temas recorrentes e "pegadinhas" comuns em concursos de alto nível.
-  `;
-  // Flash é suficiente para matérias isoladas
+  const prompt = `Gere EXATAMENTE ${numQuestao} questões de concursos da matéria: "${materia}". Priorize a banca: "${banca || 'FGV, Cebraspe ou FCC'}". Modelo: ${modelo}.`;
   return executeGeneration(prompt, numQuestao, true, 'gemini-3-flash-preview');
 }
 
 /**
- * Executor central de chamadas ao Gemini.
+ * Executor central com lógica de Fallback (Busca -> Conhecimento Interno)
  */
 async function executeGeneration(
   prompt: string, 
   numQuestao: number, 
   useSearch: boolean, 
-  modelName: string,
-  thinkingBudget?: number
+  modelName: string
 ): Promise<GeneratedExamData> {
   try {
     const ai = getAI();
@@ -84,21 +111,13 @@ async function executeGeneration(
       model: modelName,
       contents: prompt,
       config: {
-        systemInstruction: `Você é um Especialista em Concursos Públicos e Analista de Editais. 
-        Sua missão é fornecer simulados de altíssima fidelidade.
-        REGRAS DE OURO:
-        1. Retorne APENAS um objeto JSON válido.
-        2. Nunca retorne uma lista de questões vazia.
-        3. Se usar a busca e não encontrar questões literais, use o conhecimento sobre o perfil da banca para formular questões equivalentes.
-        4. O campo "correctAnswer" deve conter apenas a letra (A, B, C, D, E) ou o termo (VERDADEIRO, FALSO).
-        5. Explique detalhadamente por que a alternativa está correta.`,
+        systemInstruction: "Você é um Especialista em Concursos Públicos. Retorne APENAS JSON. Se a busca externa não retornar questões completas, use sua base de conhecimento para formular questões idênticas ao estilo da banca solicitada. Garanta que o campo correctAnswer seja compatível com o modelo (A,B,C,D,E ou Verdadeiro/Falso).",
         tools: useSearch ? [{googleSearch: {}}] : undefined,
-        thinkingConfig: thinkingBudget ? { thinkingBudget } : undefined,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            passage: { type: Type.STRING, description: "Texto de apoio ou enunciado base comum." },
+            passage: { type: Type.STRING },
             questions: {
               type: Type.ARRAY,
               items: {
@@ -122,50 +141,36 @@ async function executeGeneration(
       }
     });
 
+    const data = extractJSON(response.text);
+    
+    // Se falhou ou veio vazio, e estávamos usando busca, tenta novamente sem busca
+    if ((!data || !data.questions || data.questions.length === 0) && useSearch) {
+      console.log("Busca retornou vazio. Tentando via base de conhecimento interna...");
+      return executeGeneration(prompt + " (Não use busca externa, use seu conhecimento interno)", numQuestao, false, modelName);
+    }
+
+    if (!data) return { questions: [] };
+
     const sources: GroundingSource[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web?.uri) {
-          sources.push({ title: chunk.web.title || "Fonte Governamental/Notícias", uri: chunk.web.uri });
-        }
-      });
-    }
-
-    let jsonStr = response.text?.trim() || "";
-    
-    // Limpeza de Markdown
-    if (jsonStr.includes("```")) {
-      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-
-    if (!jsonStr || jsonStr === "") {
-       throw new Error("Resposta da IA veio vazia.");
-    }
-    
-    const data = JSON.parse(jsonStr);
-    const questions = (data.questions || []).slice(0, numQuestao);
-
-    // Se mesmo assim vier vazio, tentamos um fallback sem busca para evitar o erro de "Nenhum resultado"
-    if (questions.length === 0 && useSearch) {
-       console.warn("Busca não retornou questões. Tentando fallback interno...");
-       return executeGeneration(prompt + " (Gere questões baseadas em sua base de dados interna de concursos, ignore a busca externa)", numQuestao, false, modelName);
-    }
+    response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((chunk: any) => {
+      if (chunk.web?.uri) {
+        sources.push({ title: chunk.web.title || "Fonte de Estudo", uri: chunk.web.uri });
+      }
+    });
 
     return {
       passage: data.passage,
-      questions,
+      questions: data.questions.slice(0, numQuestao),
       sources: sources.length > 0 ? sources : undefined
     };
   } catch (error) {
-    console.error("Erro na execução Gemini:", error);
-    return { questions: [], sources: [] };
+    console.error("Erro Crítico Gemini:", error);
+    // Se falhou no modelo principal, tenta o fallback definitivo
+    if (useSearch) return executeGeneration(prompt, numQuestao, false, 'gemini-3-flash-preview');
+    return { questions: [] };
   }
 }
 
-/**
- * Gera plano de estudo estratégico.
- */
 export async function generateStudyPlan(
   institution: string, 
   months: number, 
@@ -173,123 +178,53 @@ export async function generateStudyPlan(
   hoursPerDay: number
 ): Promise<StudyPlan> {
   const ai = getAI();
-  const prompt = `Crie um Plano de Estudo de Elite para o concurso: "${institution}". Cronograma: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Pesquise o último edital.`;
+  const prompt = `Plano de Estudo para: "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/sem, ${hoursPerDay}h/dia.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "Retorne JSON. Use a busca para encontrar as disciplinas e pesos do último edital do órgão.",
         tools: [{googleSearch: {}}],
-        thinkingConfig: { thinkingBudget: 16000 },
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            phases: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  duration: { type: Type.STRING },
-                  objective: { type: Type.STRING },
-                  subjects: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-              }
-            },
-            criticalTopics: { type: Type.ARRAY, items: { type: Type.STRING } },
-            weeklyRoutine: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["title", "summary", "phases", "criticalTopics", "weeklyRoutine"]
-        }
+        responseMimeType: "application/json"
       }
     });
 
-    const sources: GroundingSource[] = [];
-    response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => {
-      if (c.web?.uri) sources.push({ title: c.web.title, uri: c.web.uri });
-    });
-
-    let jsonStr = response.text?.trim() || "";
-    if (jsonStr.includes("```")) {
-      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-
-    const plan = JSON.parse(jsonStr) as StudyPlan;
-    return { ...plan, sources: sources.length > 0 ? sources : undefined };
+    const plan = extractJSON(response.text) as StudyPlan;
+    if (!plan) throw new Error("Falha ao gerar plano");
+    return plan;
   } catch (error) {
-    console.error("Erro generateStudyPlan:", error);
+    console.error("Erro plano:", error);
     throw error;
   }
 }
 
-/**
- * Busca concursos previstos e autorizados.
- */
 export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
   const ai = getAI();
-  const prompt = `Liste 12 concursos reais confirmados ou autorizados no Brasil (2024/2025). Use a busca para validar status.`;
-  
+  const prompt = `Liste 12 concursos reais autorizados ou previstos no Brasil para 2024/2025.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        tools: [{googleSearch: {}}],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              banca: { type: Type.STRING },
-              officialLink: { type: Type.STRING },
-              status: { type: Type.STRING }
-            },
-            required: ["name", "banca", "officialLink", "status"]
-          }
-        }
-      }
+      config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
     });
-
-    let jsonStr = response.text?.trim() || "";
-    if (jsonStr.includes("```")) {
-      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-    return jsonStr ? JSON.parse(jsonStr) : [];
+    return extractJSON(response.text) || [];
   } catch (error) {
-    console.error("Erro fetchPredictedConcursos:", error);
     return [];
   }
 }
 
-/**
- * Busca sugestões de concursos por modalidade.
- */
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
   const ai = getAI();
-  const prompt = `Liste apenas os nomes de 20 concursos ativos ou previstos da modalidade ${modalidade}.`;
+  const prompt = `Nomes de 20 concursos de modalidade ${modalidade}.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
-      }
+      config: { responseMimeType: "application/json" }
     });
-    let jsonStr = response.text?.trim() || "";
-    if (jsonStr.includes("```")) {
-      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-    return jsonStr ? JSON.parse(jsonStr) : [];
+    return extractJSON(response.text) || [];
   } catch (error) {
-    console.error("Erro fetchConcursosSugestoes:", error);
     return [];
   }
 }
