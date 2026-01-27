@@ -2,11 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, GroundingSource } from "../types";
 
-/**
- * Initialize the Google GenAI client using the API key from environment variables.
- * Following strict guidelines: new GoogleGenAI({ apiKey: process.env.API_KEY })
- */
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// A API Key deve ser acessada via process.env.API_KEY conforme as diretrizes.
+// O GoogleGenAI deve ser instanciado usando o parâmetro nomeado { apiKey: ... }
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 interface GeneratedExamData {
   questions: Question[];
@@ -36,7 +34,6 @@ export async function generateExamQuestions(
     ${bancaPreferencia ? `- Prioridade de Banca: ${bancaPreferencia}.` : ''}
   `;
 
-  // Using gemini-3-pro-preview for complex reasoning task (Brazilian Civil Service Exams)
   return executeGeneration(prompt, numQuestao, true, 'gemini-3-pro-preview');
 }
 
@@ -49,7 +46,6 @@ export async function generateSubjectQuestions(
   const isReadingComp = materia.toLowerCase().includes('interpretação');
   const prompt = `Gere EXATAMENTE ${numQuestao} questões REAIS de concursos anteriores da matéria: "${materia}". Banca: "${banca || 'Diversas'}". Modelo: ${modelo}.`;
 
-  // Using gemini-3-flash-preview for standard question retrieval task
   return executeGeneration(prompt, numQuestao, isReadingComp, 'gemini-3-flash-preview');
 }
 
@@ -89,7 +85,6 @@ async function executeGeneration(prompt: string, numQuestao: number, useSearch: 
   });
 
   const sources: GroundingSource[] = [];
-  // Extracting URLs from groundingChunks as per Search Grounding guidelines
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
   if (chunks) {
     chunks.forEach((chunk: any) => {
@@ -155,7 +150,6 @@ export async function generateStudyPlan(
   });
 
   const sources: GroundingSource[] = [];
-  // Extracting URLs from groundingChunks as per Search Grounding guidelines
   response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => {
     if (c.web?.uri) sources.push({ title: c.web.title, uri: c.web.uri });
   });
