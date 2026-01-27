@@ -1,13 +1,14 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Modalidade, ModeloQuestao, Question, StudyGuide, PredictedConcurso, StudyPlan } from "../types";
+import { Modalidade, ModeloQuestao, Question, StudyGuide, PredictedConcurso, StudyPlan, GroundingSource } from "../types";
 
-// Always use the direct process.env.API_KEY as per guidelines.
+// Inicialização centralizada utilizando a variável de ambiente padrão.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface GeneratedExamData {
   questions: Question[];
   passage?: string;
+  sources?: GroundingSource[];
 }
 
 export async function generateExamQuestions(
@@ -21,56 +22,36 @@ export async function generateExamQuestions(
 ): Promise<GeneratedExamData> {
   const prompt = `
     Aja como um historiador de concursos e especialista em provas brasileiras. 
-    USE A BUSCA DO GOOGLE para verificar os editais mais recentes e o estilo de prova para o órgão: "${concurso}".
-    Gere EXATAMENTE ${numQuestao} questões de concursos REAIS para este órgão.
+    Gere EXATAMENTE ${numQuestao} questões de concursos REAIS para o órgão: "${concurso}".
+    As questões devem ser baseadas em provas que ocorreram de fato.
 
-    ESTRUTURA DE RETORNO (IMPORTANTE):
-    - Se houver um texto base comum às questões, inclua-o no campo "passage".
-    - Se for um simulado geral de várias matérias, deixe "passage" vazio.
-
-    RESTRIAÇÃO GEOGRÁFICA CRÍTICA:
-    ${estado ? `
-    - O usuário selecionou especificamente o estado: "${estado}".
-    - VOCÊ SÓ PODE GERAR QUESTÕES QUE FORAM APLICADAS NESTE ESTADO (${estado}).
-    ` : 'Foque em órgãos de esfera Nacional se o contexto permitir.'}
+    ESTRUTURA DE RETORNO:
+    - Se houver um texto base comum, use o campo "passage".
     
-    Modelo de resposta: ${modelo}.
-    ${bancaPreferencia ? `Prioridade de Banca: ${bancaPreferencia}.` : ''}
+    ${estado ? `- Restrição: Apenas questões aplicadas no estado: "${estado}".` : ''}
+    - Modelo: ${modelo}.
+    ${bancaPreferencia ? `- Prioridade de Banca: ${bancaPreferencia}.` : ''}
   `;
 
-  return executeGeneration(prompt, numQuestao, true);
+  // Usamos Gemini 3 Pro para garantir a veracidade histórica das questões
+  return executeGeneration(prompt, numQuestao, true, 'gemini-3-pro-preview');
 }
 
 export async function generateSubjectQuestions(
   materia: string,
   modelo: ModeloQuestao,
   numQuestao: number,
-  banca: string,
-  batchIndex: number = 0
+  banca: string
 ): Promise<GeneratedExamData> {
   const isReadingComp = materia.toLowerCase().includes('interpretação');
-  
-  const prompt = `
-    Aja como um professor especialista em concursos públicos.
-    Gere EXATAMENTE ${numQuestao} questões REAIS de concursos anteriores da matéria: "${materia}".
-    
-    ${isReadingComp ? `
-    AVISO ESPECIAL PARA INTERPRETAÇÃO DE TEXTO:
-    1. VOCÊ DEVE pesquisar um texto real que já foi utilizado em prova de concurso (cite autor e banca).
-    2. Coloque esse texto INTEIRO no campo "passage".
-    3. As questões devem ser elaboradas com base estrita nesse texto.
-    ` : 'Campo "passage" deve ser nulo ou vazio.'}
+  const prompt = `Gere EXATAMENTE ${numQuestao} questões REAIS de concursos anteriores da matéria: "${materia}". Banca: "${banca || 'Diversas'}". Modelo: ${modelo}.`;
 
-    Padrão da banca: "${banca || 'Diversas'}".
-    Modelo: ${modelo}.
-  `;
-
-  return executeGeneration(prompt, numQuestao, isReadingComp);
+  return executeGeneration(prompt, numQuestao, isReadingComp, 'gemini-3-flash-preview');
 }
 
-async function executeGeneration(prompt: string, numQuestao: number, useSearch: boolean): Promise<GeneratedExamData> {
+async function executeGeneration(prompt: string, numQuestao: number, useSearch: boolean, modelName: string): Promise<GeneratedExamData> {
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: modelName,
     contents: prompt,
     config: {
       tools: useSearch ? [{googleSearch: {}}] : undefined,
@@ -78,7 +59,7 @@ async function executeGeneration(prompt: string, numQuestao: number, useSearch: 
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          passage: { type: Type.STRING, description: "Texto base ou crônica que serve para as questões de interpretação." },
+          passage: { type: Type.STRING },
           questions: {
             type: Type.ARRAY,
             items: {
@@ -102,59 +83,28 @@ async function executeGeneration(prompt: string, numQuestao: number, useSearch: 
     }
   });
 
+  const sources: GroundingSource[] = [];
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  if (chunks) {
+    chunks.forEach((chunk: any) => {
+      if (chunk.web?.uri) {
+        sources.push({ title: chunk.web.title || "Fonte Oficial", uri: chunk.web.uri });
+      }
+    });
+  }
+
   try {
     const jsonStr = response.text?.trim();
-    if (!jsonStr) return { questions: [] };
+    if (!jsonStr) return { questions: [], sources };
     const data = JSON.parse(jsonStr);
     return {
       passage: data.passage,
-      questions: data.questions.slice(0, numQuestao)
+      questions: data.questions.slice(0, numQuestao),
+      sources: sources.length > 0 ? sources : undefined
     };
   } catch (error) {
-    console.error("Erro ao processar JSON:", error);
-    return { questions: [] };
-  }
-}
-
-export async function generateStudyGuide(institution: string, state?: string): Promise<StudyGuide> {
-  const prompt = `Crie um Guia de Estudo Resumido para o concurso: "${institution}" ${state ? `em ${state}` : ''}.`;
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: {
-      tools: [{googleSearch: {}}],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          institution: { type: Type.STRING },
-          topics: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                frequency: { type: Type.STRING },
-                content: { type: Type.STRING },
-                tips: { type: Type.ARRAY, items: { type: Type.STRING } }
-              }
-            }
-          },
-          generalAdvice: { type: Type.STRING }
-        },
-        required: ["title", "institution", "topics", "generalAdvice"]
-      }
-    }
-  });
-
-  try {
-    const jsonStr = response.text?.trim();
-    if (!jsonStr) throw new Error("A resposta da IA está vazia.");
-    return JSON.parse(jsonStr) as StudyGuide;
-  } catch (error) {
-    console.error("Erro ao gerar material:", error);
-    throw error;
+    console.error("Erro ao processar simulado:", error);
+    return { questions: [], sources };
   }
 }
 
@@ -164,9 +114,10 @@ export async function generateStudyPlan(
   daysPerWeek: number, 
   hoursPerDay: number
 ): Promise<StudyPlan> {
-  const prompt = `Crie um Plano de Estudo Estratégico para o concurso: "${institution}".`;
+  const prompt = `Crie um Plano de Estudo Estratégico para o concurso: "${institution}". Considere um cronograma de ${months} meses, estudando ${daysPerWeek} dias por semana, ${hoursPerDay} horas por dia.`;
+  
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: {
       tools: [{googleSearch: {}}],
@@ -196,10 +147,16 @@ export async function generateStudyPlan(
     }
   });
 
+  const sources: GroundingSource[] = [];
+  response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((c: any) => {
+    if (c.web?.uri) sources.push({ title: c.web.title, uri: c.web.uri });
+  });
+
   try {
     const jsonStr = response.text?.trim();
-    if (!jsonStr) throw new Error("A resposta da IA está vazia.");
-    return JSON.parse(jsonStr) as StudyPlan;
+    if (!jsonStr) throw new Error("Resposta vazia");
+    const plan = JSON.parse(jsonStr) as StudyPlan;
+    return { ...plan, sources: sources.length > 0 ? sources : undefined };
   } catch (error) {
     console.error("Erro ao gerar plano:", error);
     throw error;
@@ -207,9 +164,7 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
-  const currentYear = new Date().getFullYear();
-  const nextYear = currentYear + 1;
-  const prompt = `Liste os 12 concursos MAIS AGUARDADOS em ${currentYear} e ${nextYear}. Retorne apenas concursos reais com status atualizado (autorizado, previsto, ou com comissão formada).`;
+  const prompt = `Liste os 12 concursos MAIS AGUARDADOS e confirmados no Brasil. Retorne apenas concursos reais com status atualizado.`;
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -235,16 +190,14 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
 
   try {
     const jsonStr = response.text?.trim();
-    if (!jsonStr) return [];
-    return JSON.parse(jsonStr);
+    return jsonStr ? JSON.parse(jsonStr) : [];
   } catch {
     return [];
   }
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
-  const currentYear = new Date().getFullYear();
-  const prompt = `Liste os 20 concursos mais famosos da modalidade ${modalidade} no Brasil em ${currentYear}.`;
+  const prompt = `Liste os 20 concursos mais buscados da modalidade ${modalidade} no Brasil atualmente.`;
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: prompt,
@@ -255,8 +208,7 @@ export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<s
   });
   try {
     const jsonStr = response.text?.trim();
-    if (!jsonStr) return [];
-    return JSON.parse(jsonStr);
+    return jsonStr ? JSON.parse(jsonStr) : [];
   } catch {
     return [];
   }

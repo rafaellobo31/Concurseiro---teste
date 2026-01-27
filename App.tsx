@@ -11,7 +11,7 @@ import PricingModal from './components/PricingModal';
 import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
-import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan } from './types';
+import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
@@ -99,7 +99,6 @@ const App: React.FC = () => {
     }
     setPaymentProcessing(true);
     setTimeout(() => {
-      // 3 meses = 90 dias
       const threeMonths = 90 * 24 * 60 * 60 * 1000;
       const expiry = Date.now() + threeMonths;
       db.updateUser(currentUser.email, { isPro: true, proExpiry: expiry });
@@ -140,7 +139,14 @@ const App: React.FC = () => {
       const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
       if (data.questions.length === 0) { setIsNotFound(true); } 
       else {
-        setExam({ title: `Simulado: ${concurso}`, questions: data.questions, passage: data.passage, modalidade, concurso });
+        setExam({ 
+          title: `Simulado: ${concurso}`, 
+          questions: data.questions, 
+          passage: data.passage, 
+          modalidade, 
+          concurso,
+          sources: data.sources 
+        });
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) { setIsNotFound(true); } 
@@ -159,7 +165,13 @@ const App: React.FC = () => {
       const data = await generateSubjectQuestions(materia, modelo, finalNumQuestao, banca);
       if (data.questions.length === 0) { setIsNotFound(true); } 
       else {
-        setExam({ title: `Simulado: ${materia}`, questions: data.questions, passage: data.passage, materia });
+        setExam({ 
+          title: `Simulado: ${materia}`, 
+          questions: data.questions, 
+          passage: data.passage, 
+          materia,
+          sources: data.sources
+        });
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) { setIsNotFound(true); } 
@@ -302,7 +314,7 @@ const App: React.FC = () => {
         {isLoading && (
           <div className="text-center py-20">
             <div className="w-12 h-12 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-            <p className="font-black text-indigo-600 animate-pulse text-xs uppercase tracking-[0.2em]">Construindo Questões Reais...</p>
+            <p className="font-black text-indigo-600 animate-pulse text-xs uppercase tracking-[0.2em]">Sincronizando com Bases Reais...</p>
           </div>
         )}
 
@@ -317,11 +329,9 @@ const App: React.FC = () => {
                  {isCorrected && (
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-2 w-24 bg-gray-100 rounded-full overflow-hidden">
-                        {/* Fix: Use exam.questions instead of Object.values(userAnswers) to avoid indexing mismatches and type errors */}
                         <div className="h-full bg-green-500" style={{ width: `${(exam.questions.filter(q => normalizeAnswer(userAnswers[q.id] || null) === resolveToCanonical(q.correctAnswer, q.options)).length / exam.questions.length) * 100}%` }}></div>
                       </div>
                       <span className="text-xs font-bold text-gray-600">
-                        {/* Fix: Use exam.questions instead of Object.values(userAnswers) to avoid indexing mismatches and type errors */}
                         {exam.questions.filter(q => normalizeAnswer(userAnswers[q.id] || null) === resolveToCanonical(q.correctAnswer, q.options)).length} acertos de {exam.questions.length}
                       </span>
                     </div>
@@ -336,7 +346,6 @@ const App: React.FC = () => {
                </div>
             </div>
 
-            {/* Renderização do Texto Base (Passage) para Interpretação */}
             {exam.passage && (
               <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
@@ -348,9 +357,6 @@ const App: React.FC = () => {
                 </h3>
                 <div className="exam-font text-slate-700 leading-relaxed text-lg whitespace-pre-wrap select-none border-l-4 border-indigo-100 pl-8 italic">
                   {exam.passage}
-                </div>
-                <div className="mt-8 pt-6 border-t border-indigo-50 flex justify-end">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fim do Texto de Referência</p>
                 </div>
               </div>
             )}
@@ -370,6 +376,26 @@ const App: React.FC = () => {
                 />
               ))}
             </div>
+
+            {exam.sources && exam.sources.length > 0 && (
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Fontes Oficiais Utilizadas (IA Grounding)</h4>
+                <div className="flex flex-wrap gap-2">
+                  {exam.sources.map((source, i) => (
+                    <a 
+                      key={i} 
+                      href={source.uri} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 text-[10px] font-bold text-indigo-600 hover:border-indigo-200 transition-all"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      {source.title.length > 30 ? source.title.substring(0, 30) + '...' : source.title}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {!isCorrected && (
               <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-2xl flex flex-col items-center gap-6">

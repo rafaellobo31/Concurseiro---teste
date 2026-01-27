@@ -9,6 +9,11 @@ export enum ModeloQuestao {
   VERDADEIRO_FALSO = 'Verdadeiro / Falso'
 }
 
+export interface GroundingSource {
+  title: string;
+  uri: string;
+}
+
 export interface Question {
   id: string;
   text: string;
@@ -45,6 +50,7 @@ export interface StudyPlan {
   phases: StudyPhase[];
   criticalTopics: string[];
   weeklyRoutine: string[];
+  sources?: GroundingSource[];
 }
 
 export interface User {
@@ -61,10 +67,11 @@ export interface User {
 export interface Exam {
   title: string;
   questions: Question[];
-  passage?: string; // Novo campo para texto base (Interpretação)
+  passage?: string;
   modalidade?: Modalidade;
   concurso?: string;
   materia?: string;
+  sources?: GroundingSource[];
 }
 
 export interface StudyTopic {
