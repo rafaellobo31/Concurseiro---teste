@@ -1,16 +1,14 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, GroundingSource, ThermometerData } from "../types";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse } from "../types";
+import { telemetry } from "./telemetry";
 
 /**
- * Inicializa o cliente Google GenAI de forma segura.
+ * Inicializa o cliente Google GenAI de forma segura seguindo as diretrizes.
+ * Sempre utiliza process.env.API_KEY diretamente.
  */
 const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("C-PRO Warning: API_KEY não encontrada. Verifique as variáveis de ambiente.");
-  }
-  return new GoogleGenAI({ apiKey: apiKey || '' });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 interface GeneratedExamData {
@@ -20,7 +18,7 @@ interface GeneratedExamData {
 }
 
 /**
- * Extrator de JSON ultra-resiliente.
+ * Extrator de JSON ultra-resiliente para lidar com saídas que contenham grounding ou Markdown.
  */
 function extractJSON(text: string | undefined) {
   if (!text || typeof text !== 'string') return null;
@@ -56,7 +54,23 @@ function extractJSON(text: string | undefined) {
   return null;
 }
 
+/**
+ * Auxiliar para extrair GroundingSources da resposta seguindo as regras de Search Grounding.
+ */
+function extractSources(response: GenerateContentResponse): GroundingSource[] | undefined {
+  const sources: GroundingSource[] = [];
+  response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((chunk: any) => {
+    if (chunk.web?.uri) {
+      sources.push({ title: chunk.web.title || "Referência Oficial", uri: chunk.web.uri });
+    }
+  });
+  return sources.length > 0 ? sources : undefined;
+}
+
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
+  const model = 'gemini-3-flash-preview';
+  telemetry.logAICall(model, `Termômetro: ${concurso}`);
+  
   const ai = getAI();
   const prompt = `Analise os últimos 5 anos de provas para o concurso: "${concurso}"${banca ? ` e especificamente para a banca: "${banca}"` : ""}. 
   Identifique os assuntos que mais caíram.
@@ -64,7 +78,7 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model,
       contents: prompt,
       config: {
         tools: [{googleSearch: {}}],
@@ -81,7 +95,7 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
                 properties: {
                   name: { type: Type.STRING },
                   frequency: { type: Type.NUMBER },
-                  heatLevel: { type: Type.STRING, enum: ['High', 'Medium', 'Low'] },
+                  heatLevel: { type: Type.STRING },
                   description: { type: Type.STRING }
                 },
                 required: ["name", "frequency", "heatLevel", "description"]
@@ -111,7 +125,11 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
       }
     });
 
-    return extractJSON(response.text) as ThermometerData;
+    const data = extractJSON(response.text) as ThermometerData;
+    if (data) {
+      data.sources = extractSources(response);
+    }
+    return data;
   } catch (error) {
     console.error("Erro fetchThermometerData:", error);
     return null;
@@ -127,6 +145,7 @@ export async function generateExamQuestions(
   batchIndex: number = 0,
   estado?: string
 ): Promise<GeneratedExamData> {
+  telemetry.logAICall('gemini-3-flash-preview', `Simulado: ${concurso} (${numQuestao} questões)`);
   const queryBusca = `${concurso} ${estado || ''} provas anteriores banca ${bancaPreferencia || 'oficial'}`;
   
   const prompt = `
@@ -147,6 +166,7 @@ export async function generateSubjectQuestions(
   numQuestao: number,
   banca: string
 ): Promise<GeneratedExamData> {
+  telemetry.logAICall('gemini-3-flash-preview', `Disciplina: ${materia} (${numQuestao} questões)`);
   const prompt = `Gere ${numQuestao} questões reais da matéria "${materia}" da banca "${banca || 'Diversas'}". Modelo: ${modelo}.`;
   return executeGeneration(prompt, numQuestao, true, 'gemini-3-flash-preview');
 }
@@ -199,17 +219,10 @@ async function executeGeneration(
     }
     if (!data) return { questions: [] };
 
-    const sources: GroundingSource[] = [];
-    response.candidates?.[0]?.groundingMetadata?.groundingChunks?.forEach((chunk: any) => {
-      if (chunk.web?.uri) {
-        sources.push({ title: chunk.web.title || "Referência Oficial", uri: chunk.web.uri });
-      }
-    });
-
     return {
       passage: data.passage,
       questions: data.questions.slice(0, numQuestao),
-      sources: sources.length > 0 ? sources : undefined
+      sources: extractSources(response)
     };
   } catch (error: any) {
     if (useSearch) return executeGeneration(prompt, numQuestao, false, 'gemini-3-flash-preview');
@@ -223,6 +236,7 @@ export async function generateStudyPlan(
   daysPerWeek: number, 
   hoursPerDay: number
 ): Promise<StudyPlan> {
+  telemetry.logAICall('gemini-3-flash-preview', `Cronograma: ${institution}`);
   const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Pesquise o último edital.`;
   try {
     const ai = getAI();
@@ -231,7 +245,11 @@ export async function generateStudyPlan(
       contents: prompt,
       config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
     });
-    return extractJSON(response.text) as StudyPlan;
+    const plan = extractJSON(response.text) as StudyPlan;
+    if (plan) {
+      plan.sources = extractSources(response);
+    }
+    return plan;
   } catch (error) {
     const ai = getAI();
     const fallbackRes = await ai.models.generateContent({
@@ -243,7 +261,8 @@ export async function generateStudyPlan(
   }
 }
 
-export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
+export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
+  telemetry.logAICall('gemini-3-flash-preview', 'Radar de Concursos');
   const ai = getAI();
   const prompt = `Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025.`;
   try {
@@ -252,8 +271,11 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcurso[]> {
       contents: prompt,
       config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
     });
-    return extractJSON(response.text) || [];
-  } catch (error) { return []; }
+    return {
+      predictions: extractJSON(response.text) || [],
+      sources: extractSources(response)
+    };
+  } catch (error) { return { predictions: [] }; }
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {

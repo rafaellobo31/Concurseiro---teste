@@ -15,8 +15,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
 
-  // 8+ caracteres, letras (M/m), números e especiais
   const validatePassword = (pass: string) => {
+    // 8+ caracteres, 1 maiúscula, 1 minúscula, 1 número, 1 especial
     const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     return regex.test(pass);
   };
@@ -34,6 +34,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         setError('Por favor, insira um e-mail válido.');
         return;
       }
+      // Simulação de envio de token de recuperação
       alert(`Instruções de recuperação enviadas para: ${email}. Verifique sua caixa de entrada.`);
       setIsForgot(false);
       return;
@@ -45,22 +46,22 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
     }
 
     if (isLogin) {
-      const user = db.getUserByEmail(email);
-      if (user && user.passwordHash === password) {
+      const user = db.validateCredentials(email, password);
+      if (user) {
         onLogin(user);
       } else {
         setError('E-mail ou senha incorretos.');
       }
     } else {
-      if (!nickname) {
-        setError('Como quer ser chamado?');
+      if (!nickname || nickname.length < 3) {
+        setError('Seu apelido deve ter pelo menos 3 caracteres.');
         return;
       }
       if (!validatePassword(password)) {
-        setError('A senha deve ter 8+ caracteres, incluindo maiúsculas, minúsculas, números e símbolos (@$!%*?&).');
+        setError('Senha fraca: use 8+ caracteres, maiúsculas, números e símbolos.');
         return;
       }
-      // Fix: Added missing 'savedPlans' property to comply with User interface
+      
       const success = db.register({
         email,
         passwordHash: password,
@@ -70,16 +71,18 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         history: [],
         savedPlans: []
       });
+
       if (success) {
-        onLogin(db.getUserByEmail(email)!);
+        const newUser = db.getUserByEmail(email);
+        if (newUser) onLogin(newUser);
       } else {
-        setError('Este e-mail já está em uso.');
+        setError('Este e-mail já possui um cadastro ativo.');
       }
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-3xl border border-gray-200 shadow-2xl animate-in zoom-in">
+    <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-3xl border border-gray-200 shadow-2xl animate-in zoom-in duration-500">
       <div className="flex justify-center mb-6">
         <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
@@ -99,7 +102,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Como quer ser chamado?</label>
             <input 
               type="text" placeholder="Seu apelido de estudos" required 
-              className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400" 
+              className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
               value={nickname} onChange={e => setNickname(e.target.value)}
             />
           </div>
@@ -108,7 +111,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Válido</label>
           <input 
             type="email" placeholder="estudante@exemplo.com" required 
-            className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400" 
+            className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
             value={email} onChange={e => setEmail(e.target.value)}
           />
         </div>
@@ -117,20 +120,21 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Segura</label>
             <input 
               type="password" placeholder="••••••••" required 
-              className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400" 
+              className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
               value={password} onChange={e => setPassword(e.target.value)}
             />
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-red-600 text-[11px] font-bold leading-tight">
+          <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-red-600 text-[11px] font-bold leading-tight flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {error}
           </div>
         )}
 
-        <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all">
-          {isForgot ? 'ENVIAR LINK DE RECUPERAÇÃO' : isLogin ? 'ENTRAR NA PLATAFORMA' : 'CRIAR CONTA AGORA'}
+        <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-sm tracking-widest uppercase">
+          {isForgot ? 'ENVIAR LINK' : isLogin ? 'ENTRAR NA PLATAFORMA' : 'CRIAR CONTA AGORA'}
         </button>
       </form>
 

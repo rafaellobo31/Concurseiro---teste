@@ -282,6 +282,27 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
             ))}
           </div>
 
+          {/* Added display for Grounding Sources to comply with guidelines */}
+          {data.sources && data.sources.length > 0 && (
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Fontes Oficiais Utilizadas (IA Grounding)</h4>
+              <div className="flex flex-wrap gap-2">
+                {data.sources.map((source, i) => (
+                  <a 
+                    key={i} 
+                    href={source.uri} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 text-[10px] font-bold text-indigo-600 hover:border-indigo-200 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    {source.title.length > 30 ? source.title.substring(0, 30) + '...' : source.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-indigo-50 p-8 rounded-[2.5rem] border border-indigo-100 text-center">
              <div className="bg-white w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 shadow-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>

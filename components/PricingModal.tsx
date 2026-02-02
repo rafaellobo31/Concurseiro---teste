@@ -1,155 +1,235 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface PricingModalProps {
   onUpgrade: () => void;
   onClose?: () => void;
 }
 
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
+type CheckoutStep = 'plan' | 'method' | 'card' | 'pix' | 'processing';
 
 const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
-  const [isSdkReady, setIsSdkReady] = useState(false);
-  const [mpInstance, setMpInstance] = useState<any>(null);
-  
-  const currentYear = new Date().getFullYear();
-  const nextYear = currentYear + 1;
+  const [step, setStep] = useState<CheckoutStep>('plan');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [name, setName] = useState('');
 
-  // Credenciais Oficiais fornecidas
-  const PUBLIC_KEY = "APP_USR-ed0b44e8-05bd-49eb-91ac-70cf362bf6c6";
+  // Formatação automática do cartão
+  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.replace(/\D/g, '');
+    v = v.replace(/(\d{4})(?=\d)/g, '$1 ');
+    setCardNumber(v.substring(0, 19));
+  };
 
-  useEffect(() => {
-    if (window.MercadoPago) {
-      try {
-        const mp = new window.MercadoPago(PUBLIC_KEY, {
-          locale: 'pt-BR'
-        });
-        setMpInstance(mp);
-        setIsSdkReady(true);
-      } catch (error) {
-        console.error("Erro ao inicializar SDK Mercado Pago:", error);
-      }
-    }
-  }, []);
+  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2, 4);
+    setExpiry(v.substring(0, 5));
+  };
 
-  const handlePayment = () => {
-    if (!isSdkReady) {
-      alert("O módulo de pagamento está sendo inicializado. Por favor, tente novamente em instantes.");
-      return;
-    }
-    
-    console.log("Iniciando Checkout Pro Oficial com Public Key:", PUBLIC_KEY);
-    onUpgrade();
+  const handleFinalize = () => {
+    setStep('processing');
+    setTimeout(() => {
+      onUpgrade();
+    }, 3000);
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl overflow-hidden max-w-4xl mx-auto animate-in zoom-in duration-300">
-      <div className="grid grid-cols-1 md:grid-cols-2">
-        {/* Lado Esquerdo - Benefícios Premium Revisados */}
-        <div className="p-10 bg-[#009EE3] text-white flex flex-col justify-center relative overflow-hidden">
-          {/* Elemento decorativo de fundo */}
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
-          
+    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden max-w-4xl mx-auto animate-in zoom-in duration-300">
+      <div className="grid grid-cols-1 md:grid-cols-12 min-h-[500px]">
+        
+        {/* Lado Esquerdo - Resumo e Confiança (4 colunas) */}
+        <div className="md:col-span-5 p-10 bg-slate-900 text-white flex flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
-            <div className="mb-6 flex items-center gap-2">
-              <div className="bg-white/20 p-1.5 rounded-lg shadow-inner">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest opacity-90">Acesso Premium Ativado</span>
+            <div className="bg-indigo-600/20 p-3 rounded-2xl w-fit mb-8 border border-white/10">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
+            <h2 className="text-2xl font-black mb-2 tracking-tight">C-PRO ELITE</h2>
+            <p className="text-slate-400 text-sm font-medium mb-8">Acesso total por 90 dias.</p>
             
-            <h2 className="text-3xl font-black mb-4 leading-tight">Prepare-se para o Topo.</h2>
-            <p className="text-blue-100 mb-10 font-medium leading-relaxed">
-              Vença a concorrência com ferramentas de elite. Libere o poder total da IA aplicada a concursos.
-            </p>
-            
-            <ul className="space-y-5">
-              {[
-                'Simulados de Órgãos Ilimitados (+50 questões)',
-                'Cronogramas Táticos Gerados por IA',
-                'Treino de Revisão (Questões Favoritas)',
-                'Interpretação de Texto com Provas Reais',
-                'Radar de Oportunidades em Tempo Real'
-              ].map((feature, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm font-bold group">
-                  <div className="bg-white rounded-full p-1 mt-0.5 shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="text-[#009EE3]" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <span className="flex-1 opacity-95">{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-12 pt-8 border-t border-white/10 flex items-center gap-4">
-               <div className="flex -space-x-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-[#009EE3] bg-blue-400 flex items-center justify-center text-[10px] font-bold">A</div>
-                  <div className="w-8 h-8 rounded-full border-2 border-[#009EE3] bg-blue-500 flex items-center justify-center text-[10px] font-bold">B</div>
-                  <div className="w-8 h-8 rounded-full border-2 border-[#009EE3] bg-blue-600 flex items-center justify-center text-[10px] font-bold">C</div>
-               </div>
-               <p className="text-[10px] font-bold text-blue-100 uppercase tracking-widest leading-tight">Junte-se a centenas de <br/>futuros aprovados.</p>
+            <div className="space-y-4 mb-12">
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-300">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                Simulados ilimitados (+50 questões)
+              </div>
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-300">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                Cronogramas táticos com IA
+              </div>
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-300">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                Termômetro de questões recorrentes
+              </div>
             </div>
           </div>
+
+          <div className="relative z-10 border-t border-white/10 pt-8">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total a pagar</span>
+              <span className="text-indigo-400 text-xs font-black uppercase">Pagamento Único</span>
+            </div>
+            <div className="text-3xl font-black tracking-tighter">R$ 47,90</div>
+          </div>
+          
+          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
         </div>
 
-        {/* Lado Direito - Pagamento */}
-        <div className="p-10 flex flex-col justify-center bg-white">
-          <div className="flex justify-center mb-8">
-             <img src="https://logodownload.org/wp-content/uploads/2019/06/mercado-pago-logo-0.png" alt="Mercado Pago" className="h-8" />
-          </div>
+        {/* Lado Direito - Checkout Dinâmico (7 colunas) */}
+        <div className="md:col-span-7 p-8 md:p-12 bg-white flex flex-col justify-center">
           
-          <div className="text-center mb-10">
-            <div className="inline-block bg-blue-50 text-blue-600 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-6 border border-blue-100 shadow-sm animate-pulse">
-              Plano Trimestral: 3 Meses de Acesso
-            </div>
-            
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-gray-400 text-lg font-bold">R$</span>
-              <span className="text-6xl font-black text-gray-900 tracking-tighter">47</span>
-              <div className="flex flex-col items-start ml-1">
-                <span className="text-gray-400 font-bold text-xl leading-none">,90</span>
-                <span className="text-gray-300 font-bold text-[10px] uppercase">único</span>
-              </div>
-            </div>
-            
-            <p className="text-gray-400 text-[11px] mt-6 font-medium leading-relaxed max-w-[240px] mx-auto">
-              Pagamento único via Mercado Pago.<br/>
-              Acesso total liberado por 90 dias.
-            </p>
-          </div>
+          {step === 'plan' && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">Escolha como pagar</h3>
+              <div className="space-y-3 mb-8">
+                <button 
+                  onClick={() => setStep('card')}
+                  className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black text-slate-900">Cartão de Crédito</p>
+                      <p className="text-[10px] font-bold text-slate-400">Até 12x via Mercado Pago</p>
+                    </div>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-300"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
 
-          <button 
-            onClick={handlePayment}
-            className="w-full bg-[#009EE3] text-white py-5 rounded-2xl font-black text-lg shadow-2xl shadow-blue-100 hover:bg-[#0086c3] transition-all active:scale-95 mb-6 flex items-center justify-center gap-3"
-          >
-            {isSdkReady ? (
-              <>
-                ASSINAR PREMIUM
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-              </>
-            ) : 'INICIALIZANDO...'}
-          </button>
-          
-          {onClose && (
-            <button onClick={onClose} className="text-gray-400 font-black text-[10px] hover:text-indigo-600 transition-colors uppercase tracking-[0.2em] text-center w-full">
-              Continuar com a Versão Grátis
-            </button>
+                <button 
+                  onClick={() => setStep('pix')}
+                  className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 12l-8 8-8-8 8-8z"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black text-slate-900">Pix Instantâneo</p>
+                      <p className="text-[10px] font-bold text-slate-400">Liberação imediata</p>
+                    </div>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-300"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+              {onClose && (
+                <button onClick={onClose} className="w-full text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 transition-colors">
+                  Talvez mais tarde
+                </button>
+              )}
+            </div>
           )}
 
-          <div className="mt-12 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-3">
-             <div className="text-blue-500 mt-1 shrink-0">
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-             </div>
-             <div>
-               <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-1">Pagamento Seguro</h5>
-               <p className="text-[10px] text-slate-500 font-medium leading-tight">
-                 Seus dados estão protegidos pela infraestrutura oficial do Mercado Pago.
-               </p>
-             </div>
-          </div>
+          {step === 'card' && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setStep('plan')} className="text-slate-400 hover:text-indigo-600 p-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Dados do Cartão</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Número do Cartão</label>
+                  <input 
+                    type="text" 
+                    placeholder="0000 0000 0000 0000"
+                    value={cardNumber}
+                    onChange={handleCardNumberChange}
+                    className="w-full p-4 rounded-xl border-2 border-gray-100 focus:border-indigo-600 bg-white font-bold text-slate-900 outline-none transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Validade</label>
+                    <input 
+                      type="text" 
+                      placeholder="MM/AA"
+                      value={expiry}
+                      onChange={handleExpiryChange}
+                      className="w-full p-4 rounded-xl border-2 border-gray-100 focus:border-indigo-600 bg-white font-bold text-slate-900 outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">CVV</label>
+                    <input 
+                      type="text" 
+                      placeholder="123"
+                      maxLength={3}
+                      value={cvv}
+                      onChange={(e) => setCvv(e.target.value.replace(/\D/g, ''))}
+                      className="w-full p-4 rounded-xl border-2 border-gray-100 focus:border-indigo-600 bg-white font-bold text-slate-900 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Nome no Cartão</label>
+                  <input 
+                    type="text" 
+                    placeholder="COMO ESTÁ NO CARTÃO"
+                    value={name}
+                    onChange={(e) => setName(e.target.value.toUpperCase())}
+                    className="w-full p-4 rounded-xl border-2 border-gray-100 focus:border-indigo-600 bg-white font-bold text-slate-900 outline-none transition-all"
+                  />
+                </div>
+
+                <button 
+                  onClick={handleFinalize}
+                  disabled={cardNumber.length < 19 || expiry.length < 5 || cvv.length < 3 || !name}
+                  className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 mt-4"
+                >
+                  FINALIZAR PAGAMENTO
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'pix' && (
+            <div className="text-center animate-in fade-in slide-in-from-right-4 duration-500">
+              <button onClick={() => setStep('plan')} className="absolute top-8 left-8 text-slate-400 hover:text-indigo-600 p-1 hidden md:block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <h3 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight">Pagamento via Pix</h3>
+              <div className="bg-slate-50 p-6 rounded-3xl border border-gray-100 mb-6 inline-block mx-auto">
+                <img 
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=CPRO-MOCK-PIX-PAYMENT-4790" 
+                  alt="QR Code Pix"
+                  className="w-40 h-40 grayscale opacity-80"
+                />
+              </div>
+              <p className="text-xs text-slate-500 font-medium mb-8 leading-relaxed">
+                Escaneie o código acima no app do seu banco.<br/>Após o pagamento, o sistema identificará automaticamente.
+              </p>
+              <button 
+                onClick={handleFinalize}
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all"
+              >
+                JÁ REALIZEI O PIX
+              </button>
+            </div>
+          )}
+
+          {step === 'processing' && (
+            <div className="text-center py-12 animate-in zoom-in duration-500">
+              <div className="relative w-20 h-20 mx-auto mb-8">
+                <div className="absolute inset-0 border-4 border-indigo-100 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center text-indigo-600">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+              </div>
+              <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">Processando</h3>
+              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Sua segurança é nossa prioridade</p>
+              <div className="mt-12 flex justify-center gap-4 opacity-30 grayscale">
+                 <img src="https://logodownload.org/wp-content/uploads/2014/07/visa-logo-1.png" alt="Visa" className="h-4" />
+                 <img src="https://logodownload.org/wp-content/uploads/2014/07/mastercard-logo-7.png" alt="Mastercard" className="h-6" />
+                 <img src="https://logodownload.org/wp-content/uploads/2019/06/mercado-pago-logo-0.png" alt="MP" className="h-4" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

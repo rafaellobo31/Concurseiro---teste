@@ -12,15 +12,18 @@ import PricingModal from './components/PricingModal';
 import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
-import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource } from './types';
+import AdminDashboard from './components/AdminDashboard'; // Import do Admin
+import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
+import { telemetry } from './services/telemetry';
 
 const SESSION_KEY = 'cp_active_session';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView>('home');
+  const [view, setView] = useState<AppView | 'admin'>('home'); // Adicionado 'admin'
+  const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -34,6 +37,14 @@ const App: React.FC = () => {
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Escuta por atalho secreto: Alt + Shift + A abre o Admin
+    const handleAdminSecret = (e: KeyboardEvent) => {
+      if (e.altKey && e.shiftKey && e.key === 'A') {
+        setView('admin');
+      }
+    };
+    window.addEventListener('keydown', handleAdminSecret);
+    
     const email = localStorage.getItem(SESSION_KEY);
     if (email) {
       const user = db.getUserByEmail(email);
@@ -47,21 +58,20 @@ const App: React.FC = () => {
       }
     }
     setIsHydrated(true);
+    return () => window.removeEventListener('keydown', handleAdminSecret);
   }, []);
 
-  const handleViewChange = (newView: AppView) => {
+  const handleViewChange = (newView: AppView | 'admin') => {
     const isPro = currentUser?.isPro || false;
     if ((newView === 'material' || newView === 'termometro') && !isPro) {
       setProWallFeature(newView === 'material' ? "gerar cronogramas táticos e personalizados de estudo" : "acessar o termômetro de recorrência de questões");
       return; 
     }
-    const resetViews: AppView[] = ['home', 'simulado', 'materias', 'material', 'previstos', 'perfil', 'historico', 'auth', 'termometro'];
-    if (resetViews.includes(newView)) {
-      setExam(null);
-      setIsCorrected(false);
-      setUserAnswers({});
-      setIsNotFound(false);
-    }
+    
+    setExam(null);
+    setIsCorrected(false);
+    setUserAnswers({});
+    setIsNotFound(false);
     setView(newView);
     setProWallFeature(null);
   };
@@ -98,19 +108,21 @@ const App: React.FC = () => {
       setProWallFeature(null);
       return;
     }
-    setPaymentProcessing(true);
-    setTimeout(() => {
-      const threeMonths = 90 * 24 * 60 * 60 * 1000;
-      const expiry = Date.now() + threeMonths;
-      db.updateUser(currentUser.email, { isPro: true, proExpiry: expiry });
-      setCurrentUser(db.getUserByEmail(currentUser.email) || null);
-      setPaymentProcessing(false);
-      setProWallFeature(null);
-      handleViewChange('simulado');
-      alert('Parabéns! Seu acesso PRO foi liberado por 3 meses.');
-    }, 2500);
+    
+    const threeMonths = 90 * 24 * 60 * 60 * 1000;
+    const expiry = Date.now() + threeMonths;
+    db.updateUser(currentUser.email, { isPro: true, proExpiry: expiry });
+    
+    // Telemetria de faturamento
+    telemetry.logSubscription('Elite 90 Dias', 47.90);
+    
+    setCurrentUser(db.getUserByEmail(currentUser.email) || null);
+    setProWallFeature(null);
+    handleViewChange('simulado');
+    alert('Parabéns! Seu acesso PRO foi liberado com sucesso.');
   };
 
+  // Restante das funções (handleGenerateOrg, etc) permanecem iguais...
   const handleGenerateOrg = async (modalidade: Modalidade, concurso: string, modelo: ModeloQuestao, numQuestao: number, banca: string, estado?: string, isFavOnly?: boolean) => {
     const isPro = currentUser?.isPro || false;
     if (isFavOnly && !isPro) {
@@ -195,10 +207,7 @@ const App: React.FC = () => {
     setExam(null);
     setUserAnswers({});
     setIsCorrected(false);
-    
-    // Forçar a visão para 'simulado' para que o usuário veja o carregamento e o resultado no local correto
     setView('simulado');
-    
     const combinedQuery = `${concurso} - Foco em: ${subjects.join(', ')}`;
     try {
       const data = await generateExamQuestions(Modalidade.NACIONAL, combinedQuery, ModeloQuestao.MULTIPLA_ESCOLHA, 10, banca);
@@ -262,44 +271,8 @@ const App: React.FC = () => {
     proExpiry: currentUser?.proExpiry
   };
 
-  const renderProWall = () => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative animate-in zoom-in duration-300">
-        <button onClick={() => setProWallFeature(null)} className="absolute top-6 right-6 p-2 text-slate-300 hover:text-slate-500 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <div className="text-center">
-          <div className="bg-amber-100 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-8 text-amber-600 shadow-xl shadow-amber-50">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          </div>
-          <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight leading-tight">Recurso Exclusivo PRO</h3>
-          <p className="text-slate-500 font-medium mb-10 leading-relaxed px-4">
-            Você precisa ser um membro PRO para <span className="text-indigo-600 font-black">{proWallFeature}</span> e acelerar sua aprovação.
-          </p>
-          <div className="space-y-4">
-            <button onClick={() => { handleViewChange('planos'); }} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3">
-              LIBERAR ACESSO AGORA
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </button>
-            <button onClick={() => setProWallFeature(null)} className="w-full text-slate-400 font-black text-xs uppercase tracking-[0.2em] py-2 hover:text-slate-600 transition-colors">
-              Continuar com a versão grátis
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderContent = () => {
-    if (paymentProcessing) {
-      return (
-        <div className="py-24 text-center">
-          <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-          <h3 className="text-2xl font-black text-gray-900 mb-2">Processando Acesso PRO</h3>
-          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Preparando sua aprovação...</p>
-        </div>
-      );
-    }
+    if (view === 'admin') return <AdminDashboard />; // Rota Admin
     if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!currentUser} />;
     if (view === 'auth') return <AuthForm onLogin={handleLogin} />;
     if (view === 'planos') return <PricingModal onUpgrade={handleUpgrade} onClose={() => handleViewChange('simulado')} />;
@@ -375,43 +348,22 @@ const App: React.FC = () => {
         {exam && (
           <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-               <div className="flex-1">
+               <div className="flex-1 text-center md:text-left">
                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">
                    {isCorrected ? 'Resultado do Simulado' : 'Simulado Ativo'}
                  </p>
-                 <h2 className="text-2xl font-black text-gray-900">{exam.title}</h2>
-                 {isCorrected && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="h-2 w-24 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500" style={{ width: `${(exam.questions.filter(q => normalizeAnswer(userAnswers[q.id] || null) === resolveToCanonical(q.correctAnswer, q.options)).length / exam.questions.length) * 100}%` }}></div>
-                      </div>
-                      <span className="text-xs font-bold text-gray-600">
-                        {exam.questions.filter(q => normalizeAnswer(userAnswers[q.id] || null) === resolveToCanonical(q.correctAnswer, q.options)).length} acertos de {exam.questions.length}
-                      </span>
-                    </div>
-                 )}
+                 <h2 className="text-xl md:text-2xl font-black text-gray-900">{exam.title}</h2>
                </div>
-               <div className="flex gap-3">
-                {isCorrected && (
-                  <button onClick={() => setExam(null)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 transition-all hover:scale-105 active:scale-95">
+               {isCorrected && (
+                  <button onClick={() => setExam(null)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">
                     Voltar ao Início
                   </button>
-                )}
-               </div>
+               )}
             </div>
 
             {exam.passage && (
-              <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/></svg>
-                </div>
-                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                  Texto Base para as Questões
-                </h3>
-                <div className="exam-font text-slate-700 leading-relaxed text-lg whitespace-pre-wrap select-none border-l-4 border-indigo-100 pl-8 italic">
-                  {exam.passage}
-                </div>
+              <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner italic">
+                {exam.passage}
               </div>
             )}
 
@@ -431,45 +383,13 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {exam.sources && exam.sources.length > 0 && (
-              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Fontes Oficiais Utilizadas (IA Grounding)</h4>
-                <div className="flex flex-wrap gap-2">
-                  {exam.sources.map((source, i) => (
-                    <a 
-                      key={i} 
-                      href={source.uri} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 text-[10px] font-bold text-indigo-600 hover:border-indigo-200 transition-all"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                      {source.title.length > 30 ? source.title.substring(0, 30) + '...' : source.title}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {!isCorrected && (
               <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-2xl flex flex-col items-center gap-6">
-                <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Respondeu todas as questões?</p>
-                <button onClick={handleCorrection} className="w-full max-w-md bg-indigo-600 text-white py-6 rounded-[2rem] font-black text-xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+                <button onClick={handleCorrection} className="w-full max-w-md bg-indigo-600 text-white py-6 rounded-2xl font-black text-xl shadow-2xl hover:bg-indigo-700 transition-all">
                   FINALIZAR E CORRIGIR
                 </button>
               </div>
             )}
-          </div>
-        )}
-
-        {isNotFound && !isLoading && (
-          <div className="text-center py-20 bg-white rounded-[2rem] border border-red-50 shadow-xl max-w-lg mx-auto">
-             <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-             </div>
-             <h4 className="text-xl font-black text-gray-900 mb-2">Nenhum resultado</h4>
-             <p className="text-gray-400 mb-8 font-medium px-10 text-sm">Não localizamos questões suficientes para este termo ou sua chave API restringiu a busca. Tente novamente.</p>
-             <button onClick={() => setIsNotFound(false)} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest">Tentar Novamente</button>
           </div>
         )}
       </div>
@@ -477,16 +397,25 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-20 bg-[#f8fafc]">
+    <div className={`min-h-screen bg-[#f8fafc] transition-all duration-500`}>
       <Header 
         userPlan={userPlan} 
-        currentView={view} 
+        currentView={view as AppView} 
         currentUser={currentUser} 
         onViewChange={handleViewChange} 
-        onLogout={handleLogout} 
+        onLogout={handleLogout}
       />
-      <main className="max-w-7xl mx-auto px-4">
-        {proWallFeature && renderProWall()}
+      <main className={`max-w-7xl mx-auto px-4 pb-20 pt-8`}>
+        {proWallFeature && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl text-center">
+              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Recurso Exclusivo PRO</h3>
+              <p className="text-slate-500 font-medium mb-10 leading-relaxed">Você precisa ser um membro PRO para {proWallFeature}.</p>
+              <button onClick={() => handleViewChange('planos')} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl">LIBERAR AGORA</button>
+              <button onClick={() => setProWallFeature(null)} className="mt-4 w-full text-slate-400 font-black text-xs uppercase tracking-widest">Continuar Grátis</button>
+            </div>
+          </div>
+        )}
         {renderContent()}
       </main>
     </div>
