@@ -9,7 +9,6 @@
     <!-- Shim Crítico para evitar erro de 'process is not defined' -->
     <script>
       window.process = window.process || { env: {} };
-      // O Vercel injetará o valor real aqui durante o runtime/build se configurado
     </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -34,7 +33,7 @@
     "react/": "https://esm.sh/react@19.0.0/",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
-    "@google/genai": "https://esm.sh/@google/genai@1.35.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0"
   }
 }
 </script>

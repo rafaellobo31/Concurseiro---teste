@@ -1,21 +1,33 @@
 
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse } from "../types";
+import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse } from "../types";
 import { telemetry } from "./telemetry";
 
 /**
- * Helper para obter a chave de API de forma segura
+ * Função central para chamar o proxy do Gemini no backend.
+ * Resolve problemas de CORS e exposição de chaves no frontend (Vercel).
  */
-function getSafeApiKey(): string {
-  const key = process.env.API_KEY;
-  if (!key) {
-    throw new Error("API_KEY não configurada. Se estiver no Vercel, use o painel de Admin (Alt+Shift+A) para vincular uma chave.");
+async function callGeminiProxy(payload: { model: string, contents: any, config?: any }) {
+  try {
+    const response = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Falha na chamada callGeminiProxy:", error);
+    throw error;
   }
-  return key;
 }
 
 /**
- * Função utilitária para extrair JSON de uma string que pode conter markdown ou texto extra.
+ * Utilitário para limpar e parsear JSON retornado pela IA.
  */
 function parseFlexibleJSON(text: string | undefined) {
   if (!text) return null;
@@ -39,9 +51,12 @@ function parseFlexibleJSON(text: string | undefined) {
   }
 }
 
-function extractSources(response: GenerateContentResponse): GroundingSource[] | undefined {
+/**
+ * Extrai fontes de Grounding do Google Search a partir da resposta do proxy.
+ */
+function extractSources(data: any): GroundingSource[] | undefined {
   const sources: GroundingSource[] = [];
-  const metadata = response.candidates?.[0]?.groundingMetadata;
+  const metadata = data.candidates?.[0]?.groundingMetadata;
   if (metadata?.groundingChunks) {
     metadata.groundingChunks.forEach((chunk: any) => {
       if (chunk.web?.uri) {
@@ -63,21 +78,19 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
   telemetry.logAICall(modelName, `Termômetro: ${concurso}`);
   
   try {
-    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
-    const response = await ai.models.generateContent({
+    const data = await callGeminiProxy({
       model: modelName,
       contents: `Analise as tendências para o concurso: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
       Retorne um JSON com os campos: concurso, banca, analysis (texto), subjects (Array<{name, frequency, heatLevel, description}>) e topQuestions (Array de 3 questões reais).`,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
         systemInstruction: "Você é um especialista em concursos brasileiros. Sua resposta deve ser exclusivamente um objeto JSON válido."
       }
     });
 
-    const data = parseFlexibleJSON(response.text) as ThermometerData;
-    if (data) data.sources = extractSources(response);
-    return data;
+    const result = parseFlexibleJSON(data.text) as ThermometerData;
+    if (result) result.sources = extractSources(data);
+    return result;
   } catch (error) {
     console.error("Erro fetchThermometerData:", error);
     return null;
@@ -123,20 +136,18 @@ async function executeGeneration(
   modelName: string
 ): Promise<GeneratedExamData> {
   try {
-    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
-    const response = await ai.models.generateContent({
+    const data = await callGeminiProxy({
       model: modelName,
       contents: prompt,
       config: {
         tools: useSearch ? [{ googleSearch: {} }] : undefined,
-        responseMimeType: "application/json",
         systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido."
       }
     });
 
-    const data = parseFlexibleJSON(response.text);
+    const parsed = parseFlexibleJSON(data.text);
     
-    if (!data || !data.questions) {
+    if (!parsed || !parsed.questions) {
       if (useSearch) {
         return executeGeneration(prompt, numQuestao, false, modelName);
       }
@@ -144,9 +155,9 @@ async function executeGeneration(
     }
 
     return {
-      passage: data.passage,
-      questions: data.questions.slice(0, numQuestao),
-      sources: extractSources(response)
+      passage: parsed.passage,
+      questions: parsed.questions.slice(0, numQuestao),
+      sources: extractSources(data)
     };
   } catch (error) {
     console.error("Erro crítico na geração Gemini:", error);
@@ -167,14 +178,17 @@ export async function generateStudyPlan(
   Retorne um JSON com title, summary, phases (array), criticalTopics (array) e weeklyRoutine (array).`;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
-    const response = await ai.models.generateContent({
+    const data = await callGeminiProxy({
       model: modelName,
       contents: prompt,
-      config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
+      config: { 
+        tools: [{ googleSearch: {} }],
+        systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido."
+      }
     });
-    const plan = parseFlexibleJSON(response.text) as StudyPlan;
-    if (plan) plan.sources = extractSources(response);
+    
+    const plan = parseFlexibleJSON(data.text) as StudyPlan;
+    if (plan) plan.sources = extractSources(data);
     return plan;
   } catch (error) {
     console.error("Erro generateStudyPlan:", error);
@@ -187,16 +201,19 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcursosRespo
   telemetry.logAICall(modelName, 'Radar de Concursos');
 
   try {
-    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
-    const response = await ai.models.generateContent({
+    const data = await callGeminiProxy({
       model: modelName,
       contents: "Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025. Retorne um JSON com um campo 'predictions' (array de {name, banca, officialLink, status}).",
-      config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
+      config: { 
+        tools: [{ googleSearch: {} }],
+        systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido."
+      }
     });
-    const data = parseFlexibleJSON(response.text);
+    
+    const parsed = parseFlexibleJSON(data.text);
     return {
-      predictions: data?.predictions || [],
-      sources: extractSources(response)
+      predictions: parsed?.predictions || [],
+      sources: extractSources(data)
     };
   } catch (error) {
     console.error("Erro fetchPredictedConcursos:", error);
@@ -206,14 +223,14 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcursosRespo
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
   try {
-    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
-    const response = await ai.models.generateContent({
+    const data = await callGeminiProxy({
       model: 'gemini-3-flash-preview',
       contents: `Liste 20 nomes de concursos da modalidade ${modalidade} em um array JSON de strings.`,
-      config: { responseMimeType: "application/json" }
+      config: { systemInstruction: "Responda apenas com o JSON." }
     });
-    return parseFlexibleJSON(response.text) || [];
+    return parseFlexibleJSON(data.text) || [];
   } catch (error) {
+    console.error("Erro fetchConcursosSugestoes:", error);
     return [];
   }
 }

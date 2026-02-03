@@ -1,31 +1,27 @@
 
 import React, { useState, useEffect } from 'react';
 import { telemetry, TelemetryLog } from '../services/telemetry';
-import { GoogleGenAI } from "@google/genai";
 
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState(telemetry.getStats());
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [hasKey, setHasKey] = useState(false);
+  const [hasBridge, setHasBridge] = useState(false);
 
   useEffect(() => {
-    const checkKey = async () => {
-      // Verifica se existe a chave no env ou via bridge do AI Studio
-      const envKey = process.env.API_KEY;
-      let studioKey = false;
+    const checkBridge = async () => {
       try {
-        studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+        const studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+        setHasBridge(studioKey);
       } catch (e) {
-        console.debug("Bridge aistudio não disponível");
+        setHasBridge(false);
       }
-      setHasKey(!!envKey || studioKey);
     };
     
-    checkKey();
+    checkBridge();
     const interval = setInterval(() => {
       setStats(telemetry.getStats());
-      checkKey();
+      checkBridge();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -35,8 +31,7 @@ const AdminDashboard: React.FC = () => {
     if (studio && studio.openSelectKey) {
       try {
         await studio.openSelectKey();
-        // Conforme as regras, assumimos sucesso após o trigger para evitar race conditions
-        setHasKey(true);
+        setHasBridge(true);
         setTestStatus('idle');
         setErrorMessage('');
       } catch (e) {
@@ -44,32 +39,32 @@ const AdminDashboard: React.FC = () => {
         setErrorMessage("Falha ao abrir o seletor de chave do Google.");
       }
     } else {
-      setErrorMessage("O seletor 'Vincular Chave' é um recurso do Google AI Studio. No Vercel, certifique-se de que a API_KEY foi adicionada nas variáveis de ambiente do projeto e que o deploy foi refeito.");
+      setErrorMessage("O seletor de chave é um recurso do Google AI Studio. Em produção no Vercel, utilize variáveis de ambiente.");
     }
   };
 
   const testConnection = async () => {
-    const apiKey = process.env.API_KEY;
-    
-    if (!apiKey) {
-      setTestStatus('error');
-      setErrorMessage("Chave de API não encontrada no process.env.API_KEY.");
-      return;
-    }
-
     setTestStatus('loading');
     setErrorMessage('');
     
     try {
-      // Inicialização estrita conforme as diretrizes
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: 'responda apenas com a palavra "conectado"'
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3-flash-preview',
+          contents: 'responda apenas com a palavra "conectado"',
+          config: { systemInstruction: "Seja conciso." }
+        })
       });
       
-      if (response.text) {
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.text) {
         setTestStatus('success');
       } else {
         throw new Error("Resposta da IA vazia.");
@@ -77,7 +72,7 @@ const AdminDashboard: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       setTestStatus('error');
-      setErrorMessage(e.message || "Erro na conexão com a API.");
+      setErrorMessage(e.message || "Erro na conexão com a API Proxy.");
     }
   };
 
@@ -103,16 +98,16 @@ const AdminDashboard: React.FC = () => {
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Business Intelligence</span>
           </div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel do Proprietário</h2>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel Administrativo</h2>
         </div>
         <div className="flex flex-wrap gap-4">
-           {!hasKey && (
+           {!hasBridge && (
              <button 
                onClick={handleOpenSelectKey}
-               className="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all animate-bounce"
+               className="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all"
              >
                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L22 22m-5-5l.707-.707"/></svg>
-               Vincular Chave de API
+               Bridge AI Studio
              </button>
            )}
 
@@ -125,32 +120,17 @@ const AdminDashboard: React.FC = () => {
                'bg-indigo-600 text-white'
              }`}
            >
-             {testStatus === 'loading' ? 'Testando...' : 
-              testStatus === 'success' ? 'Conexão OK!' : 
-              testStatus === 'error' ? 'Tentar Novamente' : 'Testar Gemini API'}
+             {testStatus === 'loading' ? 'Testando Proxy...' : 
+              testStatus === 'success' ? 'Backend OK!' : 
+              testStatus === 'error' ? 'Falha no Proxy' : 'Testar Conexão Backend'}
            </button>
         </div>
       </header>
 
-      {(!hasKey && !process.env.API_KEY) && (
-        <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-amber-100 p-3 rounded-2xl text-amber-600">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-            </div>
-            <div>
-              <p className="font-black text-amber-900 text-sm uppercase tracking-tight">API Key não detectada</p>
-              <p className="text-xs text-amber-700 font-medium">Se você está no Vercel, o `process.env` do servidor não é compartilhado com o navegador automaticamente por segurança.</p>
-              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[10px] font-black text-indigo-600 underline mt-1 block">Documentação de Faturamento</a>
-            </div>
-          </div>
-        </div>
-      )}
-
       {errorMessage && (
         <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold flex items-center gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Falha no diagnóstico: {errorMessage}
+          Diagnóstico: {errorMessage}
         </div>
       )}
 
@@ -159,36 +139,36 @@ const AdminDashboard: React.FC = () => {
           title="Faturamento Bruto" 
           value={`R$ ${stats.totalRevenue.toFixed(2)}`} 
           color="bg-emerald-500"
-          subValue="Receita total convertida"
+          subValue="Receita total simulada"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} 
         />
         <KpiCard 
           title="Custo da IA (API)" 
           value={`$ ${stats.totalCost.toFixed(4)}`} 
           color="bg-red-500"
-          subValue="Consumo estimado Gemini"
+          subValue="Gasto estimado do servidor"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v10.17c1.13.5 2 1.63 2 2.83 0 1.66-1.34 3-3 3s-3-1.34-3-3c0-1.2.87-2.33 2-2.83V4c0-1.1.9-2 2-2z"/></svg>} 
         />
         <KpiCard 
-          title="Solicitações IA" 
+          title="Solicitações Backend" 
           value={stats.totalRequests} 
           color="bg-indigo-600"
-          subValue="Simulados e Planos gerados"
+          subValue="Volume de tráfego IA"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>} 
         />
         <KpiCard 
           title="Novos Alunos" 
           value={stats.registrations} 
           color="bg-amber-500"
-          subValue="Base total de usuários"
+          subValue="Cadastros realizados"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
         />
       </div>
 
       <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
         <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-slate-50/50">
-          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Logs de Atividade Recentes</h3>
-          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">Últimas 50 ações</span>
+          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Logs de Atividade</h3>
+          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">Sessão Atual</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -196,7 +176,7 @@ const AdminDashboard: React.FC = () => {
               <tr className="bg-slate-50">
                 <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Evento</th>
                 <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Detalhes</th>
-                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Custo/Valor</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Valor/Custo</th>
                 <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Horário</th>
               </tr>
             </thead>
@@ -213,8 +193,8 @@ const AdminDashboard: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-5">
-                    <p className="text-xs font-bold text-slate-700">{log.metadata.description || log.metadata.plan || 'Novo Usuário'}</p>
-                    {log.metadata.model && <p className="text-[9px] text-slate-400 font-medium">Modelo: {log.metadata.model}</p>}
+                    <p className="text-xs font-bold text-slate-700">{log.metadata.description || log.metadata.plan || 'Ação Sistema'}</p>
+                    {log.metadata.model && <p className="text-[9px] text-slate-400 font-medium">Model: {log.metadata.model}</p>}
                   </td>
                   <td className="p-5">
                     <p className={`text-xs font-black ${log.event === 'subscription' ? 'text-emerald-600' : 'text-slate-900'}`}>
@@ -229,11 +209,6 @@ const AdminDashboard: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {stats.logs.length === 0 && (
-            <div className="p-20 text-center">
-              <p className="text-slate-400 font-black text-xs uppercase tracking-widest">Nenhuma atividade registrada ainda.</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
