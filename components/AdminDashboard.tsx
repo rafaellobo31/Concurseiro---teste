@@ -11,9 +11,14 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     const checkKey = async () => {
-      // Verifica process.env (Vercel/Local) ou bridge do AI Studio
+      // Verifica se existe a chave no env ou via bridge do AI Studio
       const envKey = process.env.API_KEY;
-      const studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+      let studioKey = false;
+      try {
+        studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+      } catch (e) {
+        console.debug("Bridge aistudio não disponível");
+      }
       setHasKey(!!envKey || studioKey);
     };
     
@@ -26,17 +31,20 @@ const AdminDashboard: React.FC = () => {
   }, []);
 
   const handleOpenSelectKey = async () => {
-    if ((window as any).aistudio) {
+    const studio = (window as any).aistudio;
+    if (studio && studio.openSelectKey) {
       try {
-        await (window as any).aistudio.openSelectKey();
+        await studio.openSelectKey();
+        // Conforme as regras, assumimos sucesso após o trigger para evitar race conditions
         setHasKey(true);
         setTestStatus('idle');
         setErrorMessage('');
       } catch (e) {
         console.error("Erro ao abrir seletor de chave:", e);
+        setErrorMessage("Falha ao abrir o seletor de chave do Google.");
       }
     } else {
-      alert("O seletor de chave só está disponível no ambiente do Google AI Studio. No Vercel, certifique-se de configurar a variável de ambiente corretamente.");
+      setErrorMessage("O seletor 'Vincular Chave' é um recurso do Google AI Studio. No Vercel, certifique-se de que a API_KEY foi adicionada nas variáveis de ambiente do projeto e que o deploy foi refeito.");
     }
   };
 
@@ -45,7 +53,7 @@ const AdminDashboard: React.FC = () => {
     
     if (!apiKey) {
       setTestStatus('error');
-      setErrorMessage("Chave de API não encontrada. Clique em 'Vincular Chave' ou configure o Vercel.");
+      setErrorMessage("Chave de API não encontrada no process.env.API_KEY.");
       return;
     }
 
@@ -53,7 +61,7 @@ const AdminDashboard: React.FC = () => {
     setErrorMessage('');
     
     try {
-      // Cria a instância apenas no momento do teste com a chave disponível
+      // Inicialização estrita conforme as diretrizes
       const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
@@ -64,7 +72,7 @@ const AdminDashboard: React.FC = () => {
       if (response.text) {
         setTestStatus('success');
       } else {
-        throw new Error("A IA respondeu, mas o conteúdo veio vazio.");
+        throw new Error("Resposta da IA vazia.");
       }
     } catch (e: any) {
       console.error(e);
@@ -98,10 +106,10 @@ const AdminDashboard: React.FC = () => {
           <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel do Proprietário</h2>
         </div>
         <div className="flex flex-wrap gap-4">
-           {!hasKey && (window as any).aistudio && (
+           {!hasKey && (
              <button 
                onClick={handleOpenSelectKey}
-               className="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all"
+               className="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all animate-bounce"
              >
                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L22 22m-5-5l.707-.707"/></svg>
                Vincular Chave de API
@@ -132,7 +140,7 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div>
               <p className="font-black text-amber-900 text-sm uppercase tracking-tight">API Key não detectada</p>
-              <p className="text-xs text-amber-700 font-medium">Variáveis de ambiente do Vercel são ocultas no navegador. Use o botão "Vincular" ou adicione "NEXT_PUBLIC_" ao nome no Vercel.</p>
+              <p className="text-xs text-amber-700 font-medium">Se você está no Vercel, o `process.env` do servidor não é compartilhado com o navegador automaticamente por segurança.</p>
               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[10px] font-black text-indigo-600 underline mt-1 block">Documentação de Faturamento</a>
             </div>
           </div>
