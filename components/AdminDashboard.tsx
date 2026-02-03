@@ -1,9 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { telemetry, TelemetryLog } from '../services/telemetry';
+import { GoogleGenAI } from "@google/genai";
 
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState(telemetry.getStats());
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -11,6 +14,31 @@ const AdminDashboard: React.FC = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const testConnection = async () => {
+    setTestStatus('loading');
+    setErrorMessage('');
+    try {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) throw new Error("API_KEY não encontrada no process.env.");
+      
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: 'responda "ok"'
+      });
+      
+      if (response.text) {
+        setTestStatus('success');
+      } else {
+        throw new Error("Resposta vazia da IA.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      setTestStatus('error');
+      setErrorMessage(e.message || "Erro desconhecido na conexão.");
+    }
+  };
 
   const KpiCard = ({ title, value, icon, color, subValue }: any) => (
     <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl">
@@ -37,12 +65,31 @@ const AdminDashboard: React.FC = () => {
           <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel do Proprietário</h2>
         </div>
         <div className="flex gap-4">
+           <button 
+             onClick={testConnection}
+             disabled={testStatus === 'loading'}
+             className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all ${
+               testStatus === 'success' ? 'bg-emerald-500 text-white' :
+               testStatus === 'error' ? 'bg-red-500 text-white' :
+               'bg-indigo-600 text-white'
+             }`}
+           >
+             {testStatus === 'loading' ? 'Testando...' : 
+              testStatus === 'success' ? 'Conexão OK!' : 
+              testStatus === 'error' ? 'Erro de Conexão' : 'Testar Gemini API'}
+           </button>
            <button className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
              Exportar CSV
            </button>
         </div>
       </header>
+
+      {errorMessage && (
+        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold">
+          Falha no diagnóstico: {errorMessage}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         <KpiCard 

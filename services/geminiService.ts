@@ -4,110 +4,85 @@ import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, Grou
 import { telemetry } from "./telemetry";
 
 /**
- * Inicializa o cliente Google GenAI.
- * Se a API_KEY não estiver no ambiente, loga um erro crítico.
+ * Função utilitária para extrair JSON de uma string que pode conter markdown ou texto extra.
+ * Essencial quando usamos 'googleSearch', pois o modelo pode ignorar o MIME type JSON.
  */
-const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("ERRO CRÍTICO: API_KEY não encontrada em process.env. Verifique as variáveis de ambiente no Vercel.");
-  }
-  return new GoogleGenAI({ apiKey: apiKey || "" });
-};
-
-interface GeneratedExamData {
-  questions: Question[];
-  passage?: string;
-  sources?: GroundingSource[];
-}
-
-/**
- * Extrator de JSON ultra-resiliente.
- * Remove blocos de código Markdown, textos explicativos e lida com caracteres especiais.
- */
-function extractJSON(text: string | undefined) {
-  if (!text || typeof text !== 'string') return null;
-  
+function parseFlexibleJSON(text: string | undefined) {
+  if (!text) return null;
   let cleanText = text.trim();
   
-  // Remove blocos de código markdown se existirem
+  // Remove blocos de código Markdown se o modelo os incluiu
   cleanText = cleanText.replace(/^```json\s*/i, "").replace(/```\s*$/, "");
   cleanText = cleanText.replace(/^```\s*/, "").replace(/```\s*$/, "");
 
   try {
     return JSON.parse(cleanText);
   } catch (e) {
-    console.warn("Falha no parse primário de JSON, tentando extração por Regex...", e);
-    
-    // Tenta encontrar o primeiro { ou [ e o último } ou ]
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    const firstBracket = cleanText.indexOf('[');
-    const lastBracket = cleanText.lastIndexOf(']');
-
-    const start = (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) ? firstBracket : firstBrace;
-    const end = (lastBracket !== -1 && (lastBrace === -1 || lastBracket > lastBrace)) ? lastBracket : lastBrace;
-
-    if (start !== -1 && end !== -1 && end > start) {
+    // Tenta encontrar o padrão JSON dentro do texto se houver lixo ao redor
+    const match = cleanText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (match) {
       try {
-        const potentialJson = cleanText.substring(start, end + 1);
-        return JSON.parse(potentialJson);
+        return JSON.parse(match[0]);
       } catch (e2) {
-        console.error("Erro fatal ao tentar extrair JSON da resposta:", e2);
-        console.debug("Texto bruto recebido:", cleanText);
+        console.error("Erro ao parsear JSON extraído por Regex:", e2);
       }
     }
+    console.error("Falha total ao parsear resposta da IA como JSON:", cleanText);
+    return null;
   }
-  return null;
 }
 
 /**
- * Extrai fontes de grounding (URLs) para conformidade com as regras da API.
+ * Extrai fontes de grounding das respostas da IA para conformidade.
  */
 function extractSources(response: GenerateContentResponse): GroundingSource[] | undefined {
   const sources: GroundingSource[] = [];
-  const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-  
-  if (groundingMetadata?.groundingChunks) {
-    groundingMetadata.groundingChunks.forEach((chunk: any) => {
+  const metadata = response.candidates?.[0]?.groundingMetadata;
+  if (metadata?.groundingChunks) {
+    metadata.groundingChunks.forEach((chunk: any) => {
       if (chunk.web?.uri) {
-        sources.push({ 
-          title: chunk.web.title || "Fonte de Pesquisa", 
-          uri: chunk.web.uri 
-        });
+        sources.push({ title: chunk.web.title || "Referência", uri: chunk.web.uri });
       }
     });
   }
   return sources.length > 0 ? sources : undefined;
 }
 
+/**
+ * Interface para retorno de questões
+ */
+interface GeneratedExamData {
+  questions: Question[];
+  passage?: string;
+  sources?: GroundingSource[];
+}
+
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
-  const model = 'gemini-3-flash-preview';
-  telemetry.logAICall(model, `Termômetro: ${concurso}`);
+  const modelName = 'gemini-3-flash-preview';
+  telemetry.logAICall(modelName, `Termômetro: ${concurso}`);
   
-  const ai = getAI();
-  const prompt = `Analise os últimos concursos para: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
-  Retorne um JSON estrito seguindo o schema. Foque em frequência de assuntos e 3 questões exemplares.`;
+  // SEMPRE inicializar no momento da chamada para garantir a API_KEY mais atual (regra Gemini API)
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
   try {
     const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
+      model: modelName,
+      contents: `Analise as tendências para o concurso: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
+      Retorne um JSON com os campos: concurso, banca, analysis (texto), subjects (Array<{name, frequency, heatLevel, description}>) e topQuestions (Array de 3 questões reais).`,
       config: {
-        tools: [{googleSearch: {}}],
+        tools: [{ googleSearch: {} }],
+        // Com googleSearch, o responseMimeType as vezes é ignorado pelo modelo, por isso o parser flexível
         responseMimeType: "application/json",
-        // Nota: O schema ajuda, mas o grounding de busca pode injetar texto fora do JSON
-        systemInstruction: "Você é um Analista de Provas. Sua resposta deve ser exclusivamente um objeto JSON válido, sem texto adicional."
+        systemInstruction: "Você é um especialista em concursos brasileiros. Responda APENAS com o JSON solicitado."
       }
     });
 
-    const data = extractJSON(response.text) as ThermometerData;
-    if (data) {
-      data.sources = extractSources(response);
-    }
+    const text = response.text; // Usando propriedade .text conforme as regras
+    const data = parseFlexibleJSON(text) as ThermometerData;
+    if (data) data.sources = extractSources(response);
     return data;
   } catch (error) {
-    console.error("Erro na API Gemini (fetchThermometerData):", error);
+    console.error("Erro fetchThermometerData:", error);
     return null;
   }
 }
@@ -121,11 +96,13 @@ export async function generateExamQuestions(
   batchIndex: number = 0,
   estado?: string
 ): Promise<GeneratedExamData> {
-  telemetry.logAICall('gemini-3-flash-preview', `Simulado: ${concurso}`);
+  const modelName = 'gemini-3-flash-preview';
+  telemetry.logAICall(modelName, `Simulado: ${concurso}`);
   
-  const prompt = `Gere ${numQuestao} questões de concursos REAIS para "${concurso}" (${estado || 'Brasil'}). Banca: ${bancaPreferencia || 'Qualquer'}. Modelo: ${modelo}.`;
+  const prompt = `Gere ${numQuestao} questões de concursos REAIS para "${concurso}" (${estado || 'Brasil'}). Banca: ${bancaPreferencia || 'Qualquer'}. Modelo: ${modelo}. 
+  Retorne um JSON com: passage (opcional) e questions (array de objetos com id, text, options, correctAnswer, banca, ano, recorrente, explicacao).`;
 
-  return executeGeneration(prompt, numQuestao, true, 'gemini-3-flash-preview');
+  return executeGeneration(prompt, numQuestao, true, modelName);
 }
 
 export async function generateSubjectQuestions(
@@ -134,9 +111,12 @@ export async function generateSubjectQuestions(
   numQuestao: number,
   banca: string
 ): Promise<GeneratedExamData> {
-  telemetry.logAICall('gemini-3-flash-preview', `Matéria: ${materia}`);
-  const prompt = `Gere ${numQuestao} questões reais da matéria "${materia}" da banca "${banca || 'Diversas'}". Modelo: ${modelo}.`;
-  return executeGeneration(prompt, numQuestao, true, 'gemini-3-flash-preview');
+  const modelName = 'gemini-3-flash-preview';
+  telemetry.logAICall(modelName, `Disciplina: ${materia}`);
+  const prompt = `Gere ${numQuestao} questões reais da matéria "${materia}" da banca "${banca || 'Diversas'}". Modelo: ${modelo}.
+  Retorne um JSON com o array de questões em 'questions'.`;
+  
+  return executeGeneration(prompt, numQuestao, true, modelName);
 }
 
 async function executeGeneration(
@@ -145,36 +125,36 @@ async function executeGeneration(
   useSearch: boolean, 
   modelName: string
 ): Promise<GeneratedExamData> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  
   try {
-    const ai = getAI();
     const response = await ai.models.generateContent({
       model: modelName,
       contents: prompt,
       config: {
-        systemInstruction: "Responda apenas com JSON. Estrutura: { passage: string, questions: Array<{id, text, options, correctAnswer, banca, ano, recorrente, explicacao}> }",
-        tools: useSearch ? [{googleSearch: {}}] : undefined,
-        responseMimeType: "application/json"
+        tools: useSearch ? [{ googleSearch: {} }] : undefined,
+        responseMimeType: "application/json",
+        systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido. Nunca inclua texto antes ou depois do JSON."
       }
     });
 
-    const data = extractJSON(response.text);
+    const data = parseFlexibleJSON(response.text);
     
-    // Fallback: Se falhou com busca, tenta sem busca (base de conhecimento interna)
-    if ((!data || !data.questions || data.questions.length === 0) && useSearch) {
-      console.warn("Falha na geração com busca, tentando fallback sem busca...");
-      return executeGeneration(prompt, numQuestao, false, modelName);
+    if (!data || !data.questions || data.questions.length === 0) {
+      if (useSearch) {
+        console.warn("Falha ao gerar com pesquisa web, tentando fallback sem busca...");
+        return executeGeneration(prompt + " (Gere usando sua base de conhecimento interna)", numQuestao, false, modelName);
+      }
+      throw new Error("Resposta da IA vazia ou inválida.");
     }
-
-    if (!data) throw new Error("Não foi possível obter dados válidos da IA.");
 
     return {
       passage: data.passage,
       questions: data.questions.slice(0, numQuestao),
       sources: extractSources(response)
     };
-  } catch (error: any) {
-    console.error("Erro na execução da geração Gemini:", error);
-    // Se for erro de segurança ou bloqueio, tenta um prompt mais simples
+  } catch (error) {
+    console.error("Erro crítico na geração Gemini:", error);
     return { questions: [] };
   }
 }
@@ -185,59 +165,59 @@ export async function generateStudyPlan(
   daysPerWeek: number, 
   hoursPerDay: number
 ): Promise<StudyPlan> {
-  telemetry.logAICall('gemini-3-flash-preview', `Plano: ${institution}`);
-  const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Retorne JSON.`;
-  
+  const modelName = 'gemini-3-flash-preview';
+  telemetry.logAICall(modelName, `Plano: ${institution}`);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+
+  const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Pesquise o último edital. 
+  Retorne um JSON com title, summary, phases (array), criticalTopics (array) e weeklyRoutine (array).`;
+
   try {
-    const ai = getAI();
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: modelName,
       contents: prompt,
-      config: { 
-        tools: [{googleSearch: {}}], 
-        responseMimeType: "application/json" 
-      }
+      config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
     });
-    const plan = extractJSON(response.text) as StudyPlan;
+    const plan = parseFlexibleJSON(response.text) as StudyPlan;
     if (plan) plan.sources = extractSources(response);
     return plan;
   } catch (error) {
-    console.error("Erro ao gerar plano de estudos:", error);
+    console.error("Erro generateStudyPlan:", error);
     throw error;
   }
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
-  const ai = getAI();
-  const prompt = `Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025 em formato JSON: { predictions: Array<{name, banca, officialLink, status}> }`;
-  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  const modelName = 'gemini-3-flash-preview';
+  telemetry.logAICall(modelName, 'Radar de Concursos');
+
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
+      model: modelName,
+      contents: "Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025. Retorne um JSON com um campo 'predictions' que é um array de objetos {name, banca, officialLink, status}.",
+      config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
     });
-    const data = extractJSON(response.text);
+    const data = parseFlexibleJSON(response.text);
     return {
       predictions: data?.predictions || [],
       sources: extractSources(response)
     };
   } catch (error) {
-    console.error("Erro ao buscar concursos previstos:", error);
+    console.error("Erro fetchPredictedConcursos:", error);
     return { predictions: [] };
   }
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
-  const ai = getAI();
-  const prompt = `Nomes de 15 concursos de modalidade ${modalidade}. Responda apenas um array JSON de strings.`;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
+      contents: `Liste 20 nomes de concursos da modalidade ${modalidade} em um array JSON de strings.`,
       config: { responseMimeType: "application/json" }
     });
-    return extractJSON(response.text) || [];
+    return parseFlexibleJSON(response.text) || [];
   } catch (error) {
     return [];
   }
