@@ -3,29 +3,52 @@ import React, { useState, useEffect } from 'react';
 import { telemetry, TelemetryLog } from '../services/telemetry';
 import { GoogleGenAI } from "@google/genai";
 
+// Removed conflicting declare global block.
+// The environment already defines window.aistudio as type AIStudio.
+// We use type casting to (window as any).aistudio to safely access pre-configured methods.
+
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState(telemetry.getStats());
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [hasKey, setHasKey] = useState(false);
 
   useEffect(() => {
+    const checkKey = async () => {
+      const envKey = process.env.API_KEY;
+      // Using casting to any to avoid property collision with existing AIStudio type
+      const studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+      setHasKey(!!envKey || studioKey);
+    };
+    
+    checkKey();
     const interval = setInterval(() => {
       setStats(telemetry.getStats());
+      checkKey();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleOpenSelectKey = async () => {
+    if ((window as any).aistudio) {
+      await (window as any).aistudio.openSelectKey();
+      // Assume success after triggering key selection per guidelines
+      setHasKey(true);
+      setTestStatus('idle');
+      setErrorMessage('');
+    }
+  };
 
   const testConnection = async () => {
     setTestStatus('loading');
     setErrorMessage('');
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API_KEY não encontrada no process.env.");
+      // Use process.env.API_KEY directly in the constructor as per guidelines
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: 'responda "ok"'
+        contents: 'responda apenas com a palavra "conectado"'
       });
       
       if (response.text) {
@@ -36,7 +59,13 @@ const AdminDashboard: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       setTestStatus('error');
-      setErrorMessage(e.message || "Erro desconhecido na conexão.");
+      
+      if (e.message?.includes("entity was not found")) {
+         setErrorMessage("Chave de API inválida ou projeto não encontrado. Tente vincular novamente.");
+         setHasKey(false);
+      } else {
+         setErrorMessage(e.message || "Erro desconhecido na conexão. Verifique se a API_KEY foi configurada no Vercel.");
+      }
     }
   };
 
@@ -64,7 +93,17 @@ const AdminDashboard: React.FC = () => {
           </div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel do Proprietário</h2>
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
+           {!hasKey && (window as any).aistudio && (
+             <button 
+               onClick={handleOpenSelectKey}
+               className="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all"
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L22 22m-5-5l.707-.707"/></svg>
+               Vincular Chave de API
+             </button>
+           )}
+
            <button 
              onClick={testConnection}
              disabled={testStatus === 'loading'}
@@ -76,17 +115,29 @@ const AdminDashboard: React.FC = () => {
            >
              {testStatus === 'loading' ? 'Testando...' : 
               testStatus === 'success' ? 'Conexão OK!' : 
-              testStatus === 'error' ? 'Erro de Conexão' : 'Testar Gemini API'}
-           </button>
-           <button className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
-             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-             Exportar CSV
+              testStatus === 'error' ? 'Tentar Novamente' : 'Testar Gemini API'}
            </button>
         </div>
       </header>
 
+      {(!hasKey && !process.env.API_KEY) && (
+        <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-amber-100 p-3 rounded-2xl text-amber-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            </div>
+            <div>
+              <p className="font-black text-amber-900 text-sm uppercase tracking-tight">API Key não detectada</p>
+              <p className="text-xs text-amber-700 font-medium">O Vercel não fornece a chave diretamente ao navegador. Vincule uma chave paga para habilitar a IA.</p>
+              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[10px] font-black text-indigo-600 underline mt-1 block">Documentação de Faturamento</a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {errorMessage && (
-        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold">
+        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold flex items-center gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           Falha no diagnóstico: {errorMessage}
         </div>
       )}

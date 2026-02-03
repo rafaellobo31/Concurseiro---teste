@@ -61,8 +61,9 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, `Termômetro: ${concurso}`);
   
-  // SEMPRE inicializar no momento da chamada para garantir a API_KEY mais atual (regra Gemini API)
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // SEMPRE inicializar no momento da chamada para garantir a API_KEY mais atual.
+  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
     const response = await ai.models.generateContent({
@@ -71,13 +72,12 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
       Retorne um JSON com os campos: concurso, banca, analysis (texto), subjects (Array<{name, frequency, heatLevel, description}>) e topQuestions (Array de 3 questões reais).`,
       config: {
         tools: [{ googleSearch: {} }],
-        // Com googleSearch, o responseMimeType as vezes é ignorado pelo modelo, por isso o parser flexível
         responseMimeType: "application/json",
-        systemInstruction: "Você é um especialista em concursos brasileiros. Responda APENAS com o JSON solicitado."
+        systemInstruction: "Você é um especialista em concursos brasileiros. Sua resposta deve ser exclusivamente um objeto JSON válido, sem qualquer texto adicional explicativo."
       }
     });
 
-    const text = response.text; // Usando propriedade .text conforme as regras
+    const text = response.text;
     const data = parseFlexibleJSON(text) as ThermometerData;
     if (data) data.sources = extractSources(response);
     return data;
@@ -125,7 +125,8 @@ async function executeGeneration(
   useSearch: boolean, 
   modelName: string
 ): Promise<GeneratedExamData> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
@@ -167,7 +168,8 @@ export async function generateStudyPlan(
 ): Promise<StudyPlan> {
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, `Plano: ${institution}`);
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Pesquise o último edital. 
   Retorne um JSON com title, summary, phases (array), criticalTopics (array) e weeklyRoutine (array).`;
@@ -188,7 +190,8 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, 'Radar de Concursos');
 
@@ -210,7 +213,8 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcursosRespo
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
