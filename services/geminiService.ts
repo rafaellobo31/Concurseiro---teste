@@ -4,21 +4,29 @@ import { Modalidade, ModeloQuestao, Question, PredictedConcurso, StudyPlan, Grou
 import { telemetry } from "./telemetry";
 
 /**
+ * Helper para obter a chave de API de forma segura
+ */
+function getSafeApiKey(): string {
+  const key = process.env.API_KEY;
+  if (!key) {
+    throw new Error("API_KEY não configurada. Se estiver no Vercel, use o painel de Admin (Alt+Shift+A) para vincular uma chave.");
+  }
+  return key;
+}
+
+/**
  * Função utilitária para extrair JSON de uma string que pode conter markdown ou texto extra.
- * Essencial quando usamos 'googleSearch', pois o modelo pode ignorar o MIME type JSON.
  */
 function parseFlexibleJSON(text: string | undefined) {
   if (!text) return null;
   let cleanText = text.trim();
   
-  // Remove blocos de código Markdown se o modelo os incluiu
   cleanText = cleanText.replace(/^```json\s*/i, "").replace(/```\s*$/, "");
   cleanText = cleanText.replace(/^```\s*/, "").replace(/```\s*$/, "");
 
   try {
     return JSON.parse(cleanText);
   } catch (e) {
-    // Tenta encontrar o padrão JSON dentro do texto se houver lixo ao redor
     const match = cleanText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (match) {
       try {
@@ -27,14 +35,10 @@ function parseFlexibleJSON(text: string | undefined) {
         console.error("Erro ao parsear JSON extraído por Regex:", e2);
       }
     }
-    console.error("Falha total ao parsear resposta da IA como JSON:", cleanText);
     return null;
   }
 }
 
-/**
- * Extrai fontes de grounding das respostas da IA para conformidade.
- */
 function extractSources(response: GenerateContentResponse): GroundingSource[] | undefined {
   const sources: GroundingSource[] = [];
   const metadata = response.candidates?.[0]?.groundingMetadata;
@@ -48,9 +52,6 @@ function extractSources(response: GenerateContentResponse): GroundingSource[] | 
   return sources.length > 0 ? sources : undefined;
 }
 
-/**
- * Interface para retorno de questões
- */
 interface GeneratedExamData {
   questions: Question[];
   passage?: string;
@@ -61,11 +62,8 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, `Termômetro: ${concurso}`);
   
-  // SEMPRE inicializar no momento da chamada para garantir a API_KEY mais atual.
-  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
   try {
+    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
     const response = await ai.models.generateContent({
       model: modelName,
       contents: `Analise as tendências para o concurso: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
@@ -73,12 +71,11 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        systemInstruction: "Você é um especialista em concursos brasileiros. Sua resposta deve ser exclusivamente um objeto JSON válido, sem qualquer texto adicional explicativo."
+        systemInstruction: "Você é um especialista em concursos brasileiros. Sua resposta deve ser exclusivamente um objeto JSON válido."
       }
     });
 
-    const text = response.text;
-    const data = parseFlexibleJSON(text) as ThermometerData;
+    const data = parseFlexibleJSON(response.text) as ThermometerData;
     if (data) data.sources = extractSources(response);
     return data;
   } catch (error) {
@@ -125,28 +122,25 @@ async function executeGeneration(
   useSearch: boolean, 
   modelName: string
 ): Promise<GeneratedExamData> {
-  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
+    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
     const response = await ai.models.generateContent({
       model: modelName,
       contents: prompt,
       config: {
         tools: useSearch ? [{ googleSearch: {} }] : undefined,
         responseMimeType: "application/json",
-        systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido. Nunca inclua texto antes ou depois do JSON."
+        systemInstruction: "Sua resposta deve ser EXCLUSIVAMENTE um objeto JSON válido."
       }
     });
 
     const data = parseFlexibleJSON(response.text);
     
-    if (!data || !data.questions || data.questions.length === 0) {
+    if (!data || !data.questions) {
       if (useSearch) {
-        console.warn("Falha ao gerar com pesquisa web, tentando fallback sem busca...");
-        return executeGeneration(prompt + " (Gere usando sua base de conhecimento interna)", numQuestao, false, modelName);
+        return executeGeneration(prompt, numQuestao, false, modelName);
       }
-      throw new Error("Resposta da IA vazia ou inválida.");
+      throw new Error("IA não retornou questões válidas.");
     }
 
     return {
@@ -168,13 +162,12 @@ export async function generateStudyPlan(
 ): Promise<StudyPlan> {
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, `Plano: ${institution}`);
-  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. Pesquise o último edital. 
+  const prompt = `Crie um Cronograma de Estudo para "${institution}". Duração: ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. 
   Retorne um JSON com title, summary, phases (array), criticalTopics (array) e weeklyRoutine (array).`;
 
   try {
+    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
     const response = await ai.models.generateContent({
       model: modelName,
       contents: prompt,
@@ -190,15 +183,14 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
-  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = 'gemini-3-flash-preview';
   telemetry.logAICall(modelName, 'Radar de Concursos');
 
   try {
+    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: "Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025. Retorne um JSON com um campo 'predictions' que é um array de objetos {name, banca, officialLink, status}.",
+      contents: "Liste 12 concursos reais confirmados ou autorizados no Brasil para 2024/2025. Retorne um JSON com um campo 'predictions' (array de {name, banca, officialLink, status}).",
       config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
     });
     const data = parseFlexibleJSON(response.text);
@@ -213,9 +205,8 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcursosRespo
 }
 
 export async function fetchConcursosSugestoes(modalidade: Modalidade): Promise<string[]> {
-  // Usando process.env.API_KEY diretamente sem fallback conforme guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
+    const ai = new GoogleGenAI({ apiKey: getSafeApiKey() });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Liste 20 nomes de concursos da modalidade ${modalidade} em um array JSON de strings.`,

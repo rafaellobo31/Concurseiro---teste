@@ -3,10 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { telemetry, TelemetryLog } from '../services/telemetry';
 import { GoogleGenAI } from "@google/genai";
 
-// Removed conflicting declare global block.
-// The environment already defines window.aistudio as type AIStudio.
-// We use type casting to (window as any).aistudio to safely access pre-configured methods.
-
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState(telemetry.getStats());
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -15,8 +11,8 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     const checkKey = async () => {
+      // Verifica process.env (Vercel/Local) ou bridge do AI Studio
       const envKey = process.env.API_KEY;
-      // Using casting to any to avoid property collision with existing AIStudio type
       const studioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
       setHasKey(!!envKey || studioKey);
     };
@@ -31,20 +27,34 @@ const AdminDashboard: React.FC = () => {
 
   const handleOpenSelectKey = async () => {
     if ((window as any).aistudio) {
-      await (window as any).aistudio.openSelectKey();
-      // Assume success after triggering key selection per guidelines
-      setHasKey(true);
-      setTestStatus('idle');
-      setErrorMessage('');
+      try {
+        await (window as any).aistudio.openSelectKey();
+        setHasKey(true);
+        setTestStatus('idle');
+        setErrorMessage('');
+      } catch (e) {
+        console.error("Erro ao abrir seletor de chave:", e);
+      }
+    } else {
+      alert("O seletor de chave só está disponível no ambiente do Google AI Studio. No Vercel, certifique-se de configurar a variável de ambiente corretamente.");
     }
   };
 
   const testConnection = async () => {
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+      setTestStatus('error');
+      setErrorMessage("Chave de API não encontrada. Clique em 'Vincular Chave' ou configure o Vercel.");
+      return;
+    }
+
     setTestStatus('loading');
     setErrorMessage('');
+    
     try {
-      // Use process.env.API_KEY directly in the constructor as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Cria a instância apenas no momento do teste com a chave disponível
+      const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -54,18 +64,12 @@ const AdminDashboard: React.FC = () => {
       if (response.text) {
         setTestStatus('success');
       } else {
-        throw new Error("Resposta vazia da IA.");
+        throw new Error("A IA respondeu, mas o conteúdo veio vazio.");
       }
     } catch (e: any) {
       console.error(e);
       setTestStatus('error');
-      
-      if (e.message?.includes("entity was not found")) {
-         setErrorMessage("Chave de API inválida ou projeto não encontrado. Tente vincular novamente.");
-         setHasKey(false);
-      } else {
-         setErrorMessage(e.message || "Erro desconhecido na conexão. Verifique se a API_KEY foi configurada no Vercel.");
-      }
+      setErrorMessage(e.message || "Erro na conexão com a API.");
     }
   };
 
@@ -128,7 +132,7 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div>
               <p className="font-black text-amber-900 text-sm uppercase tracking-tight">API Key não detectada</p>
-              <p className="text-xs text-amber-700 font-medium">O Vercel não fornece a chave diretamente ao navegador. Vincule uma chave paga para habilitar a IA.</p>
+              <p className="text-xs text-amber-700 font-medium">Variáveis de ambiente do Vercel são ocultas no navegador. Use o botão "Vincular" ou adicione "NEXT_PUBLIC_" ao nome no Vercel.</p>
               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[10px] font-black text-indigo-600 underline mt-1 block">Documentação de Faturamento</a>
             </div>
           </div>
