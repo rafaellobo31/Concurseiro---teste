@@ -95,7 +95,6 @@ export interface PredictedConcurso {
   status: string;
 }
 
-// Added to handle grounding sources for predicted concursos
 export interface PredictedConcursosResponse {
   predictions: PredictedConcurso[];
   sources?: GroundingSource[];
@@ -112,11 +111,10 @@ export interface ThermometerData {
   }[];
   analysis: string;
   topQuestions?: Question[];
-  // Added sources to comply with search grounding requirements
   sources?: GroundingSource[];
 }
 
-export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro';
+export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis';
 
 export interface UserPlan {
   isPro: boolean;
@@ -124,5 +122,4 @@ export interface UserPlan {
   proExpiry?: number;
 }
 
-// Fixed missing ViewMode export as requested in App.tsx
 export type ViewMode = 'desktop' | 'mobile';

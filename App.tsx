@@ -13,6 +13,7 @@ import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
 import AdminDashboard from './components/AdminDashboard';
+import UserAnalysisView from './components/UserAnalysisView'; // Import do novo componente
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Atalho secreto exclusivo para o proprietário acessar o painel técnico
     const handleAdminSecret = (e: KeyboardEvent) => {
       if (e.altKey && e.shiftKey && e.key === 'A') {
         setView('admin');
@@ -67,10 +69,14 @@ const App: React.FC = () => {
       return; 
     }
     
-    setExam(null);
-    setExamDiagnostic(null);
-    setIsCorrected(false);
-    setUserAnswers({});
+    // Reseta estados de simulado ao mudar de tela, a menos que seja para análise
+    if (newView !== 'user_analysis' && newView !== 'planos') {
+      setExam(null);
+      setExamDiagnostic(null);
+      setIsCorrected(false);
+      setUserAnswers({});
+    }
+    
     setIsNotFound(false);
     setView(newView);
     setProWallFeature(null);
@@ -249,8 +255,23 @@ const App: React.FC = () => {
     proExpiry: currentUser?.proExpiry
   };
 
+  // Cálculo de acertos atual para passar para a análise
+  const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length : 0;
+
   const renderContent = () => {
-    if (view === 'admin') return <AdminDashboard isPro={userPlan.isPro} onUpgrade={() => handleViewChange('planos')} />;
+    if (view === 'admin') return <AdminDashboard />; // Painel exclusivo do dono
+    if (view === 'user_analysis') {
+      return (
+        <UserAnalysisView 
+          exam={exam} 
+          diagnostic={examDiagnostic} 
+          userPlan={userPlan} 
+          score={currentScore}
+          onUpgrade={() => handleViewChange('planos')}
+          onBack={() => setView('simulado')}
+        />
+      );
+    }
     if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!currentUser} />;
     if (view === 'auth') return <AuthForm onLogin={handleLogin} />;
     if (view === 'planos') return <PricingModal onUpgrade={handleUpgrade} onClose={() => handleViewChange('simulado')} />;
@@ -284,19 +305,20 @@ const App: React.FC = () => {
 
         {exam && (
           <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            {/* Header do Resultado com Gatilhos de Conversão */}
+            {/* Header do Resultado Corrigido: agora redireciona para user_analysis */}
             {isCorrected && (
                <div className="bg-slate-900 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5">
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                      <div className="text-center md:text-left">
                         <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2 block">Diagnóstico de Performance</span>
-                        <h2 className="text-4xl font-black mb-4">Você acertou {userAnswers && Object.values(userAnswers).length > 0 ? (exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length) : 0} de {exam.questions.length} questões.</h2>
+                        <h2 className="text-4xl font-black mb-4">Você acertou {currentScore} de {exam.questions.length} questões.</h2>
                         <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
                           {examDiagnostic?.proTip || "Você foi bem, mas candidatos aprovados nesta banca costumam ter desempenho superior em questões de recorrência."}
                         </p>
                      </div>
                      <div className="flex flex-col gap-4 w-full md:w-auto">
-                        <button onClick={() => setView('admin')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                        {/* Redirecionamento corrigido para UserAnalysisView */}
+                        <button onClick={() => setView('user_analysis')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                            VER ANÁLISE COMPLETA
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                         </button>
