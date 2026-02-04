@@ -83,7 +83,7 @@ const ExamForm: React.FC<ExamFormProps> = ({ onGenerate, onShowProWall, isLoadin
   };
 
   const handleNumQuestaoChange = (val: number) => {
-    if (!isPro && val > 3) {
+    if (!isPro && val > 20) {
       onShowProWall("gerar simulados com até 50 questões e análise detalhada");
       return;
     }
@@ -200,12 +200,12 @@ const ExamForm: React.FC<ExamFormProps> = ({ onGenerate, onShowProWall, isLoadin
             <div className="space-y-2 relative">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between">
                 Nº de Questões
-                {!isPro && <span className="text-amber-500 font-black">Grátis: 3</span>}
+                {!isPro && <span className="text-amber-500 font-black">Grátis: 20</span>}
               </label>
               <select 
                 value={numQuestao} 
                 onChange={e => handleNumQuestaoChange(Number(e.target.value))} 
-                className={`w-full p-4 rounded-2xl border-2 bg-white font-black text-slate-900 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer shadow-sm ${!isPro && numQuestao > 3 ? 'border-amber-200' : ''}`}
+                className={`w-full p-4 rounded-2xl border-2 bg-white font-black text-slate-900 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer shadow-sm ${!isPro && numQuestao > 20 ? 'border-amber-200' : ''}`}
               >
                 <option value={3}>3 Questões (Rápido)</option>
                 <option value={10}>10 Questões (Padrão)</option>

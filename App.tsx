@@ -12,7 +12,7 @@ import PricingModal from './components/PricingModal';
 import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
-import AdminDashboard from './components/AdminDashboard'; // Import do Admin
+import AdminDashboard from './components/AdminDashboard';
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
@@ -22,13 +22,13 @@ import { telemetry } from './services/telemetry';
 const SESSION_KEY = 'cp_active_session';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView | 'admin'>('home'); // Adicionado 'admin'
+  const [view, setView] = useState<AppView | 'admin'>('home');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [isNotFound, setIsNotFound] = useState(false);
   const [exam, setExam] = useState<Exam | null>(null);
+  const [examDiagnostic, setExamDiagnostic] = useState<any>(null);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [isCorrected, setIsCorrected] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -37,7 +37,6 @@ const App: React.FC = () => {
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Escuta por atalho secreto: Alt + Shift + A abre o Admin
     const handleAdminSecret = (e: KeyboardEvent) => {
       if (e.altKey && e.shiftKey && e.key === 'A') {
         setView('admin');
@@ -69,6 +68,7 @@ const App: React.FC = () => {
     }
     
     setExam(null);
+    setExamDiagnostic(null);
     setIsCorrected(false);
     setUserAnswers({});
     setIsNotFound(false);
@@ -108,21 +108,15 @@ const App: React.FC = () => {
       setProWallFeature(null);
       return;
     }
-    
-    const threeMonths = 90 * 24 * 60 * 60 * 1000;
-    const expiry = Date.now() + threeMonths;
+    const expiry = Date.now() + (90 * 24 * 60 * 60 * 1000);
     db.updateUser(currentUser.email, { isPro: true, proExpiry: expiry });
-    
-    // Telemetria de faturamento
     telemetry.logSubscription('Elite 90 Dias', 47.90);
-    
     setCurrentUser(db.getUserByEmail(currentUser.email) || null);
     setProWallFeature(null);
-    handleViewChange('simulado');
+    handleViewChange('perfil');
     alert('Parabéns! Seu acesso PRO foi liberado com sucesso.');
   };
 
-  // Restante das funções (handleGenerateOrg, etc) permanecem iguais...
   const handleGenerateOrg = async (modalidade: Modalidade, concurso: string, modelo: ModeloQuestao, numQuestao: number, banca: string, estado?: string, isFavOnly?: boolean) => {
     const isPro = currentUser?.isPro || false;
     if (isFavOnly && !isPro) {
@@ -132,6 +126,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setIsNotFound(false);
     setExam(null);
+    setExamDiagnostic(null);
     setUserAnswers({});
     setIsCorrected(false);
 
@@ -147,24 +142,17 @@ const App: React.FC = () => {
         return;
     }
     
-    const finalNumQuestao = isPro ? numQuestao : 3;
+    const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
       const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
       } else {
-        setExam({ 
-          title: `Simulado: ${concurso}`, 
-          questions: data.questions, 
-          passage: data.passage, 
-          modalidade, 
-          concurso,
-          sources: data.sources 
-        });
+        setExam({ title: `Simulado: ${concurso}`, questions: data.questions, passage: data.passage, modalidade, concurso, sources: data.sources });
+        setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) { 
-      console.error("Erro na geração:", error);
       setIsNotFound(true); 
     } finally { 
       setIsLoading(false); 
@@ -176,25 +164,20 @@ const App: React.FC = () => {
     setIsLoading(true);
     setIsNotFound(false);
     setExam(null);
+    setExamDiagnostic(null);
     setUserAnswers({});
     setIsCorrected(false);
-    const finalNumQuestao = isPro ? numQuestao : 3;
+    const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
       const data = await generateSubjectQuestions(materia, modelo, finalNumQuestao, banca);
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
       } else {
-        setExam({ 
-          title: `Simulado: ${materia}`, 
-          questions: data.questions, 
-          passage: data.passage, 
-          materia,
-          sources: data.sources
-        });
+        setExam({ title: `Simulado: ${materia}`, questions: data.questions, passage: data.passage, materia, sources: data.sources });
+        setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) { 
-      console.error("Erro na geração de matéria:", error);
       setIsNotFound(true); 
     } finally { 
       setIsLoading(false); 
@@ -205,6 +188,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setIsNotFound(false);
     setExam(null);
+    setExamDiagnostic(null);
     setUserAnswers({});
     setIsCorrected(false);
     setView('simulado');
@@ -214,17 +198,11 @@ const App: React.FC = () => {
       if (!data || !data.questions || data.questions.length === 0) {
         setIsNotFound(true);
       } else {
-        setExam({
-          title: `Simulado Tático: ${concurso}`,
-          questions: data.questions,
-          passage: data.passage,
-          concurso,
-          sources: data.sources
-        });
+        setExam({ title: `Simulado Tático: ${concurso}`, questions: data.questions, passage: data.passage, concurso, sources: data.sources });
+        setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) {
-      console.error(error);
       setIsNotFound(true);
     } finally {
       setIsLoading(false);
@@ -272,69 +250,28 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (view === 'admin') return <AdminDashboard />; // Rota Admin
+    if (view === 'admin') return <AdminDashboard isPro={userPlan.isPro} onUpgrade={() => handleViewChange('planos')} />;
     if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!currentUser} />;
     if (view === 'auth') return <AuthForm onLogin={handleLogin} />;
     if (view === 'planos') return <PricingModal onUpgrade={handleUpgrade} onClose={() => handleViewChange('simulado')} />;
     if (view === 'perfil') {
       if (!currentUser) return <AuthForm onLogin={handleLogin} />;
-      return (
-        <UserProfile 
-          user={currentUser} 
-          userPlan={userPlan} 
-          onUpdate={handleUpdateUser} 
-          onUpgrade={() => handleViewChange('planos')}
-          onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)}
-        />
-      );
+      return <UserProfile user={currentUser} userPlan={userPlan} onUpdate={handleUpdateUser} onUpgrade={() => handleViewChange('planos')} onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)} />;
     }
     if (view === 'historico') {
       if (!currentUser) return <AuthForm onLogin={handleLogin} />;
       return <HistoryView history={currentUser.history} />;
     }
-    if (view === 'material') {
-      return (
-        <StudyMaterial 
-          userPlan={userPlan} 
-          onUpgrade={() => handleViewChange('planos')} 
-          onSavePlan={handleSaveStudyPlan}
-          isLoggedIn={!!currentUser}
-        />
-      );
-    }
-    if (view === 'termometro') {
-      return (
-        <ThermometerView 
-          userPlan={userPlan} 
-          onUpgrade={() => handleViewChange('planos')} 
-          onGenerateExam={handleGenerateFromThermometer}
-          onShowProWall={setProWallFeature}
-        />
-      );
-    }
+    if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!currentUser} />;
+    if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={handleGenerateFromThermometer} onShowProWall={setProWallFeature} />;
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
 
     return (
       <div className="space-y-12 py-8">
         {!exam && !isLoading && (
           <div className="animate-in fade-in duration-500">
-            {view === 'simulado' && (
-              <ExamForm 
-                onGenerate={handleGenerateOrg} 
-                onShowProWall={setProWallFeature}
-                isLoading={isLoading} 
-                isPro={userPlan.isPro} 
-                hasFavorites={currentUser?.favorites ? currentUser.favorites.length > 0 : false}
-              />
-            )}
-            {view === 'materias' && (
-              <SimuladosMateriasForm 
-                onGenerate={handleGenerateSubject} 
-                onShowProWall={setProWallFeature}
-                isLoading={isLoading} 
-                isPro={userPlan.isPro} 
-              />
-            )}
+            {view === 'simulado' && <ExamForm onGenerate={handleGenerateOrg} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} hasFavorites={currentUser?.favorites ? currentUser.favorites.length > 0 : false} />}
+            {view === 'materias' && <SimuladosMateriasForm onGenerate={handleGenerateSubject} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} />}
           </div>
         )}
 
@@ -347,22 +284,44 @@ const App: React.FC = () => {
 
         {exam && (
           <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-               <div className="flex-1 text-center md:text-left">
-                 <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">
-                   {isCorrected ? 'Resultado do Simulado' : 'Simulado Ativo'}
-                 </p>
-                 <h2 className="text-xl md:text-2xl font-black text-gray-900">{exam.title}</h2>
+            {/* Header do Resultado com Gatilhos de Conversão */}
+            {isCorrected && (
+               <div className="bg-slate-900 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5">
+                  <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                     <div className="text-center md:text-left">
+                        <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2 block">Diagnóstico de Performance</span>
+                        <h2 className="text-4xl font-black mb-4">Você acertou {userAnswers && Object.values(userAnswers).length > 0 ? (exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length) : 0} de {exam.questions.length} questões.</h2>
+                        <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
+                          {examDiagnostic?.proTip || "Você foi bem, mas candidatos aprovados nesta banca costumam ter desempenho superior em questões de recorrência."}
+                        </p>
+                     </div>
+                     <div className="flex flex-col gap-4 w-full md:w-auto">
+                        <button onClick={() => setView('admin')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                           VER ANÁLISE COMPLETA
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                        </button>
+                        {!userPlan.isPro && (
+                          <button onClick={() => handleViewChange('planos')} className="bg-white/10 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 hover:bg-white/20 transition-all">
+                             LIBERAR MÉTODO PRO
+                          </button>
+                        )}
+                     </div>
+                  </div>
+                  <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-600/10 rounded-full blur-[100px]"></div>
                </div>
-               {isCorrected && (
-                  <button onClick={() => setExam(null)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">
-                    Voltar ao Início
-                  </button>
-               )}
-            </div>
+            )}
+
+            {!isCorrected && (
+              <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div className="flex-1 text-center md:text-left">
+                   <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">Simulado Ativo</p>
+                   <h2 className="text-xl md:text-2xl font-black text-gray-900">{exam.title}</h2>
+                 </div>
+              </div>
+            )}
 
             {exam.passage && (
-              <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner italic">
+              <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner italic text-slate-700 leading-relaxed">
                 {exam.passage}
               </div>
             )}
@@ -390,6 +349,14 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
+            
+            {isCorrected && (
+              <div className="flex justify-center pb-12">
+                 <button onClick={() => setExam(null)} className="text-slate-400 font-black text-xs uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                   Sair do Simulado
+                 </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -398,13 +365,7 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen bg-[#f8fafc] transition-all duration-500`}>
-      <Header 
-        userPlan={userPlan} 
-        currentView={view as AppView} 
-        currentUser={currentUser} 
-        onViewChange={handleViewChange} 
-        onLogout={handleLogout}
-      />
+      <Header userPlan={userPlan} currentView={view as AppView} currentUser={currentUser} onViewChange={handleViewChange} onLogout={handleLogout} />
       <main className={`max-w-7xl mx-auto px-4 pb-20 pt-8`}>
         {proWallFeature && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">

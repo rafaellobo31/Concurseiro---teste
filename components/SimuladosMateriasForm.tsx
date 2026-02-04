@@ -34,7 +34,7 @@ const SimuladosMateriasForm: React.FC<SimuladosMateriasFormProps> = ({ onGenerat
   const [banca, setBanca] = useState('');
 
   const handleNumChange = (val: number) => {
-    if (!isPro && val > 3) {
+    if (!isPro && val > 20) {
       onShowProWall("gerar simulados completos por matéria com até 50 questões");
       return;
     }
@@ -76,13 +76,13 @@ const SimuladosMateriasForm: React.FC<SimuladosMateriasFormProps> = ({ onGenerat
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 flex justify-between">
               Quantidade 
-              {!isPro && <span className="text-amber-500 font-black">Grátis: 3</span>}
+              {!isPro && <span className="text-amber-500 font-black">Grátis: 20</span>}
             </label>
             <select 
               value={numQuestao}
               onChange={(e) => handleNumChange(parseInt(e.target.value))}
               className={`w-full p-4 rounded-2xl border-2 bg-white transition-all text-slate-900 font-bold appearance-none cursor-pointer outline-none shadow-sm ${
-                !isPro && numQuestao > 3 ? 'border-amber-200' : 'border-gray-100 focus:border-indigo-500'
+                !isPro && numQuestao > 20 ? 'border-amber-200' : 'border-gray-100 focus:border-indigo-500'
               }`}
             >
               <option value={3}>3 Questões (Rápido)</option>
