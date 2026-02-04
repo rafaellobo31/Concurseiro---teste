@@ -2,37 +2,63 @@
 import React, { useState, useEffect } from 'react';
 import { telemetry, TelemetryLog } from '../services/telemetry';
 
-interface AdminDashboardProps {
-  isPro?: boolean;
-  onUpgrade?: () => void;
-}
-
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ isPro = false, onUpgrade }) => {
+const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState(telemetry.getStats());
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const [isProduction, setIsProduction] = useState(false);
 
   useEffect(() => {
+    // Detecta ambiente de execução
     setIsProduction(window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1'));
-    const interval = setInterval(() => setStats(telemetry.getStats()), 5000);
+    
+    // Atualização automática dos dados a cada 5 segundos
+    const interval = setInterval(() => {
+      setStats(telemetry.getStats());
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const KpiCard = ({ title, value, icon, color, subValue, premium }: any) => (
-    <div className={`relative bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden transition-all ${premium && !isPro ? 'opacity-90' : ''}`}>
-      {!isPro && premium && (
-        <div className="absolute inset-0 z-10 backdrop-blur-[6px] bg-white/40 flex flex-col items-center justify-center p-4 text-center">
-           <div className="bg-indigo-600 p-2 rounded-xl text-white mb-2 shadow-lg">
-             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-           </div>
-           <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-1">Recurso Elite</p>
-           <button onClick={onUpgrade} className="text-[9px] font-bold text-indigo-600 underline">Liberar Análise</button>
-        </div>
-      )}
+  const testConnection = async () => {
+    setTestStatus('loading');
+    setErrorMessage('');
+    
+    try {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3-flash-preview',
+          contents: 'Diga "Conexão estabelecida com sucesso"',
+          config: { systemInstruction: "Responda de forma curta e técnica." }
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || `Erro HTTP ${response.status}`);
+      }
+
+      if (data.text) {
+        setTestStatus('success');
+      } else {
+        throw new Error("Resposta da IA retornou sem conteúdo de texto.");
+      }
+    } catch (e: any) {
+      console.error("[OwnerAdmin] Falha no teste de backend:", e);
+      setTestStatus('error');
+      setErrorMessage(e.message || "Falha crítica na comunicação com o proxy da API.");
+    }
+  };
+
+  const KpiCard = ({ title, value, icon, color, subValue }: any) => (
+    <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden">
       <div className="flex justify-between items-start mb-4">
         <div className={`p-3 rounded-2xl ${color} text-white`}>
           {icon}
         </div>
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Performance</span>
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Métrica Técnica</span>
       </div>
       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
       <h3 className="text-3xl font-black text-slate-900 tracking-tight">{value}</h3>
@@ -45,143 +71,113 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ isPro = false, onUpgrad
       <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-              Centro de Inteligência Tática
+              {isProduction ? 'System Monitoring (Vercel Edge)' : 'Local Development Mode'}
             </span>
           </div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Seu Painel de Performance</h2>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Painel do Proprietário</h2>
         </div>
         
-        {!isPro && (
-          <button 
-            onClick={onUpgrade}
-            className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-3"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            DESBLOQUEAR MÉTODO DOS APROVADOS
-          </button>
-        )}
+        <div className="flex gap-4">
+           <button 
+             onClick={testConnection}
+             disabled={testStatus === 'loading'}
+             className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all ${
+               testStatus === 'success' ? 'bg-emerald-500 text-white' :
+               testStatus === 'error' ? 'bg-rose-500 text-white' :
+               'bg-slate-900 text-white shadow-xl'
+             }`}
+           >
+             {testStatus === 'loading' ? 'Verificando API...' : 
+              testStatus === 'success' ? 'API Online' : 
+              testStatus === 'error' ? 'Erro de Conexão' : 'Testar Backend Gemini'}
+           </button>
+        </div>
       </header>
 
-      {/* Diagnóstico de Conversão */}
+      {errorMessage && (
+        <div className="mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-[11px] font-bold flex items-center gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Diagnóstico de Erro: {errorMessage}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         <KpiCard 
-          title="Simulados Concluídos" 
+          title="Faturamento Bruto" 
+          value={`R$ ${stats.totalRevenue.toFixed(2)}`} 
+          color="bg-emerald-500"
+          subValue="Receita total simulada"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} 
+        />
+        <KpiCard 
+          title="Custo API Gemini" 
+          value={`$ ${stats.totalCost.toFixed(4)}`} 
+          color="bg-rose-500"
+          subValue="Gasto estimado (Infra)"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v10.17c1.13.5 2 1.63 2 2.83 0 1.66-1.34 3-3 3s-3-1.34-3-3c0-1.2.87-2.33 2-2.83V4c0-1.1.9-2 2-2z"/></svg>} 
+        />
+        <KpiCard 
+          title="Req. Backend" 
           value={stats.totalRequests} 
           color="bg-indigo-600"
-          subValue="Volume de treino acumulado"
+          subValue="Volume total de tráfego IA"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>} 
         />
         <KpiCard 
-          title="Probabilidade de Nomeação" 
-          value={isPro ? "82%" : "??%"} 
-          color="bg-emerald-500"
-          premium={true}
-          subValue="Cálculo baseado em editais 2024"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v20"/><path d="m17 7-5-5-5 5"/><path d="m17 17-5 5-5-5"/></svg>} 
-        />
-        <KpiCard 
-          title="Gap para Aprovados" 
-          value={isPro ? "-12%" : "??%"} 
-          color="bg-rose-500"
-          premium={true}
-          subValue="Sua distância do Top 5%"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>} 
-        />
-        <KpiCard 
-          title="Tempo Médio / Questão" 
-          value={isPro ? "1:42s" : "??s"} 
+          title="Novos Cadastros" 
+          value={stats.registrations} 
           color="bg-amber-500"
-          premium={true}
-          subValue="Agilidade tática estimada"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} 
+          subValue="Total de usuários na base"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>} 
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Tabela de Atividade */}
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
-          <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Histórico de Batalha</h3>
-            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">Tempo Real</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Status</th>
-                  <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Simulado</th>
-                  <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Acertos</th>
-                  <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.logs.slice(0, 8).map((log: TelemetryLog) => (
-                  <tr key={log.id} className="hover:bg-slate-50/50 transition-colors border-b border-gray-50 last:border-0">
-                    <td className="p-5">
-                      <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                         <span className="text-[10px] font-bold text-slate-500 uppercase">Concluído</span>
-                      </div>
-                    </td>
-                    <td className="p-5">
-                      <p className="text-xs font-black text-slate-700 uppercase tracking-tight">{log.metadata.description || 'Simulado Geral'}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">{log.metadata.model}</p>
-                    </td>
-                    <td className="p-5">
-                      <p className="text-xs font-black text-indigo-600">--</p>
-                    </td>
-                    <td className="p-5">
-                      <p className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleDateString('pt-BR')}</p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!isPro && (
-            <div className="p-8 bg-indigo-600 text-white text-center">
-              <h4 className="font-black text-lg mb-2">Seu histórico completo está bloqueado.</h4>
-              <p className="text-indigo-100 text-sm mb-6 max-w-md mx-auto">Candidatos aprovados usam o histórico para identificar padrões de erro e ajustar a rota de estudos.</p>
-              <button onClick={onUpgrade} className="bg-white text-indigo-600 px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">
-                ATIVAR ANALYTICS ELITE
-              </button>
-            </div>
-          )}
+      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
+        <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-slate-50/50">
+          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Logs de Atividade Técnica</h3>
+          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">Real-Time Sync</span>
         </div>
-
-        {/* Sidebar Diagnóstico */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
-            <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">Diagnóstico de Nomeação</h4>
-            <p className="text-xl font-black mb-6 leading-tight">Você foi bem, mas ainda não o suficiente para garantir a aprovação.</p>
-            <div className="space-y-4 mb-8">
-               <div className="flex items-center gap-3">
-                 <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
-                 <p className="text-xs text-slate-300 font-medium">Nível atual: <span className="text-white font-black">Intermediário 1</span></p>
-               </div>
-               <div className="flex items-center gap-3">
-                 <div className="w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
-                 <p className="text-xs text-slate-300 font-medium">Fraqueza detectada: <span className="text-white font-black">Direito Administrativo</span></p>
-               </div>
-            </div>
-            <p className="text-[11px] text-slate-400 italic mb-8">"Candidatos aprovados costumam ter desempenho 15% maior nestas matérias táticas."</p>
-            <button onClick={onUpgrade} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">
-              QUER ESTUDAR COMO QUEM PASSA?
-            </button>
-            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl"></div>
-          </div>
-
-          <div className={`bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl ${!isPro ? 'opacity-50 grayscale' : ''}`}>
-             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Gráfico de Evolução</h4>
-             <div className="h-40 flex items-end gap-2 px-2">
-                {[40, 65, 55, 80, 75, 90, 85].map((h, i) => (
-                  <div key={i} className="flex-1 bg-indigo-100 rounded-t-lg transition-all hover:bg-indigo-600" style={{ height: `${h}%` }}></div>
-                ))}
-             </div>
-             {!isPro && <p className="text-[9px] font-black text-center mt-4 text-indigo-600 uppercase">Desbloqueie para ver sua curva de aprendizado</p>}
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Evento</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Descrição Técnica</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Valor/Custo</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Data/Hora</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.logs.map((log: TelemetryLog) => (
+                <tr key={log.id} className="hover:bg-slate-50/50 transition-colors border-b border-gray-50 last:border-0">
+                  <td className="p-5">
+                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                      log.event === 'ai_request' ? 'bg-indigo-50 text-indigo-600' :
+                      log.event === 'subscription' ? 'bg-emerald-50 text-emerald-600' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {log.event.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="p-5">
+                    <p className="text-xs font-bold text-slate-700">{log.metadata.description || log.metadata.plan || 'Interação Genérica'}</p>
+                    {log.metadata.model && <p className="text-[9px] text-slate-400 font-medium">Model: {log.metadata.model}</p>}
+                  </td>
+                  <td className="p-5">
+                    <p className={`text-xs font-black ${log.event === 'subscription' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                      {log.metadata.value ? `+ R$ ${log.metadata.value.toFixed(2)}` : 
+                       log.metadata.costEstimated ? `- $ ${log.metadata.costEstimated.toFixed(4)}` : '---'}
+                    </p>
+                  </td>
+                  <td className="p-5">
+                    <p className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleString('pt-BR')}</p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
