@@ -358,6 +358,8 @@ const App: React.FC = () => {
                     selectedAnswer={userAnswers[q.id] || null} 
                     onSelect={(ans) => !isCorrected && setUserAnswers(prev => ({...prev, [q.id]: ans}))} 
                     isCorrected={isCorrected}
+                    isPro={userPlan.isPro}
+                    onUpgrade={() => handleViewChange('planos')}
                     isFavorite={currentUser?.favorites.some(f => f.id === q.id)}
                     onToggleFavorite={() => handleToggleFav(q)}
                 />

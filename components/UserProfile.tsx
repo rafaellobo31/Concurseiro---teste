@@ -356,6 +356,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
                 ) : (
                   <div className="grid gap-8">
                     {user.favorites.map((q, idx) => (
+                      /* Fix: Added missing isPro and onUpgrade props to QuestionItem */
                       <QuestionItem 
                         key={q.id} 
                         question={q} 
@@ -364,6 +365,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
                         selectedAnswer={null}
                         onSelect={() => {}}
                         isCorrected={true}
+                        isPro={userPlan.isPro}
+                        onUpgrade={onUpgrade}
                         isFavorite={true}
                         onToggleFavorite={() => onUpdate({ favorites: user.favorites.filter(f => f.id !== q.id) })}
                       />

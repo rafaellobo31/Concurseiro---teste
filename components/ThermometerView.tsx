@@ -233,6 +233,7 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
               </div>
               <div className="grid gap-6">
                 {data.topQuestions.map((q, idx) => (
+                  /* Fix: Added missing isPro and onUpgrade props to QuestionItem */
                   <QuestionItem 
                     key={q.id || idx} 
                     question={q} 
@@ -241,6 +242,8 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
                     selectedAnswer={null} 
                     onSelect={() => {}} 
                     isCorrected={true}
+                    isPro={userPlan.isPro}
+                    onUpgrade={onUpgrade}
                   />
                 ))}
               </div>
