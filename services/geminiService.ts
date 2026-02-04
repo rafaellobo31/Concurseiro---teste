@@ -92,7 +92,9 @@ async function executeWithFallback(
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
   telemetry.logAICall('gemini-3-flash-preview', `Termômetro: ${concurso}`);
   const prompt = `Analise as tendências para o concurso: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
-  JSON: { "concurso": string, "banca": string, "analysis": string, "subjects": Array<{name, frequency, heatLevel, description}>, "topQuestions": Array<Question>, "diagnostic": { "avgTime": string, "level": string, "competitionWarning": string } }`;
+  JSON: { "concurso": string, "banca": string, "analysis": string, "subjects": Array<{name, frequency, heatLevel, description}>, "topQuestions": Array<Question>, "diagnostic": { "avgTime": string, "level": string, "competitionWarning": string } }.
+  Cada objeto Question deve ter: { id, text, options, correctAnswer, banca, ano, recorrente, explicacao }.
+  O campo 'explicacao' deve ser um texto rico explicando o porquê da resposta correta.`;
   const instruction = "Especialista em concursos brasileiros. Forneça análises táticas de alto nível.";
 
   try {
@@ -116,7 +118,13 @@ export async function generateExamQuestions(
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
   telemetry.logAICall('gemini-3-flash-preview', `Simulado: ${concurso}`);
   const prompt = `Gere ${numQuestao} questões reais para "${concurso}". Banca: ${bancaPreferencia || 'Diversas'}. Modelo: ${modelo}. 
-  JSON: { "passage": string, "questions": Array<Question>, "diagnostic": { "estimatedTimePerQuestion": "2:30", "difficultyLevel": "Intermediário", "proTip": "Candidatos aprovados em ${bancaPreferencia} focam em jurisprudência neste tema." } }`;
+  JSON: { 
+    "passage": string, 
+    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao }>, 
+    "diagnostic": { "estimatedTimePerQuestion": "2:30", "difficultyLevel": "Intermediário", "proTip": "Dica estratégica." } 
+  }.
+  IMPORTANTE: 'correctAnswer' deve ser a letra da alternativa (A, B, C, D ou E) ou 'Verdadeiro'/'Falso'.
+  'explicacao' deve ser um parágrafo detalhado com a fundamentação jurídica ou técnica da resposta.`;
   
   try {
     const res = await executeWithFallback(prompt, "Crie simulados que desafiem o nível de aprovação.", true);
@@ -139,7 +147,11 @@ export async function generateSubjectQuestions(
   banca: string
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
   const prompt = `Gere ${numQuestao} questões de "${materia}" da banca "${banca}". 
-  JSON: { "questions": Array<Question>, "diagnostic": { "level": "Avançado", "avgScoreRequired": "85%" } }`;
+  JSON: { 
+    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao }>, 
+    "diagnostic": { "level": "Avançado", "avgScoreRequired": "85%" } 
+  }.
+  O campo 'explicacao' é obrigatório e deve ser detalhado.`;
 
   try {
     const res = await executeWithFallback(prompt, "Foque na recorrência tática da disciplina.", true);
@@ -162,7 +174,7 @@ export async function generateStudyPlan(
   hoursPerDay: number
 ): Promise<StudyPlan> {
   const prompt = `Cronograma para "${institution}". ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. 
-  JSON: { "title": string, "summary": string, "phases": Array, "criticalTopics": Array, "weeklyRoutine": Array, "proComparison": "Alunos de elite costumam dedicar 20% mais tempo à revisão que este plano." }`;
+  JSON: { "title": string, "summary": string, "phases": Array, "criticalTopics": Array, "weeklyRoutine": Array, "proComparison": string }`;
 
   try {
     const res = await executeWithFallback(prompt, "Plano pedagógico de alta performance.", true);
