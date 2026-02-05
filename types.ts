@@ -23,6 +23,7 @@ export interface Question {
   ano: number;
   recorrente: boolean;
   explicacao: string;
+  boardMindset?: string; // Como a banca pensou esta questão
 }
 
 export interface ExamResult {
@@ -74,30 +75,12 @@ export interface Exam {
   sources?: GroundingSource[];
 }
 
-export interface StudyTopic {
-  title: string;
-  frequency: string;
-  content: string;
-  tips: string[];
-}
-
-export interface StudyGuide {
-  title: string;
-  institution: string;
-  topics: StudyTopic[];
-  generalAdvice: string;
-}
-
-export interface PredictedConcurso {
-  name: string;
-  banca: string;
-  officialLink: string;
-  status: string;
-}
-
-export interface PredictedConcursosResponse {
-  predictions: PredictedConcurso[];
-  sources?: GroundingSource[];
+export interface BoardPsychology {
+  pattern: 'Literal' | 'Doctrinal' | 'Jurisprudential' | 'Mixed';
+  commonTraps: string[];
+  semanticTriggers: string[];
+  candidateMistakes: string[];
+  tacticalAdvice: string;
 }
 
 export interface ThermometerData {
@@ -105,12 +88,27 @@ export interface ThermometerData {
   banca: string;
   subjects: {
     name: string;
-    frequency: number; // 0-100
+    frequency: number;
     heatLevel: 'High' | 'Medium' | 'Low';
     description: string;
+    psychology?: BoardPsychology; // Dados exclusivos PRO
   }[];
   analysis: string;
   topQuestions?: Question[];
+  sources?: GroundingSource[];
+}
+
+// Fix: Added missing PredictedConcurso interface used in PredictedConcursos component
+export interface PredictedConcurso {
+  name: string;
+  status: string;
+  banca: string;
+  officialLink: string;
+}
+
+// Fix: Added missing PredictedConcursosResponse interface used in geminiService
+export interface PredictedConcursosResponse {
+  predictions: PredictedConcurso[];
   sources?: GroundingSource[];
 }
 

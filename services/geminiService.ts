@@ -2,9 +2,6 @@
 import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse } from "../types";
 import { telemetry } from "./telemetry";
 
-/**
- * Interface interna para padronizar respostas de geração com metadados de diagnóstico
- */
 interface GeneratedAIResponse {
   text: string;
   sources?: GroundingSource[];
@@ -90,12 +87,31 @@ async function executeWithFallback(
 }
 
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
-  telemetry.logAICall('gemini-3-flash-preview', `Termômetro: ${concurso}`);
-  const prompt = `Analise as tendências para o concurso: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
-  JSON: { "concurso": string, "banca": string, "analysis": string, "subjects": Array<{name, frequency, heatLevel, description}>, "topQuestions": Array<Question>, "diagnostic": { "avgTime": string, "level": string, "competitionWarning": string } }.
-  Cada objeto Question deve ter: { id, text, options, correctAnswer, banca, ano, recorrente, explicacao }.
-  O campo 'explicacao' deve ser um texto rico explicando o porquê da resposta correta.`;
-  const instruction = "Especialista em concursos brasileiros. Forneça análises táticas de alto nível.";
+  telemetry.logAICall('gemini-3-flash-preview', `Termômetro Tático: ${concurso}`);
+  const prompt = `Analise o DNA de cobrança para: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
+  Não foque apenas no edital, mas em COMO a banca cobra.
+  JSON esperado: { 
+    "concurso": string, 
+    "banca": string, 
+    "analysis": string, 
+    "subjects": Array<{
+      "name": string, 
+      "frequency": number, 
+      "heatLevel": string, 
+      "description": string,
+      "psychology": {
+        "pattern": "Literal" | "Doctrinal" | "Jurisprudential" | "Mixed",
+        "commonTraps": Array<string>,
+        "semanticTriggers": Array<string>,
+        "candidateMistakes": Array<string>,
+        "tacticalAdvice": string
+      }
+    }>, 
+    "topQuestions": Array<Question> 
+  }.
+  Cada Question deve ter 'boardMindset' explicando o gatilho da questão.`;
+  
+  const instruction = "Você é um Analista de Inteligência de Concursos. Seu objetivo é dissecar os padrões mentais das bancas examinadoras brasileiras.";
 
   try {
     const res = await executeWithFallback(prompt, instruction, true);
@@ -116,18 +132,17 @@ export async function generateExamQuestions(
   batchIndex: number = 0,
   estado?: string
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
-  telemetry.logAICall('gemini-3-flash-preview', `Simulado: ${concurso}`);
-  const prompt = `Gere ${numQuestao} questões reais para "${concurso}". Banca: ${bancaPreferencia || 'Diversas'}. Modelo: ${modelo}. 
+  telemetry.logAICall('gemini-3-flash-preview', `Simulado Tático: ${concurso}`);
+  const prompt = `Gere ${numQuestao} questões simulando fielmente o estilo da banca "${bancaPreferencia || 'Diversas'}" para o concurso "${concurso}". 
   JSON: { 
     "passage": string, 
-    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao }>, 
-    "diagnostic": { "estimatedTimePerQuestion": "2:30", "difficultyLevel": "Intermediário", "proTip": "Dica estratégica." } 
+    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao, boardMindset }>, 
+    "diagnostic": { "proTip": "Dica de como a banca inverte conceitos neste tema." } 
   }.
-  IMPORTANTE: 'correctAnswer' deve ser a letra da alternativa (A, B, C, D ou E) ou 'Verdadeiro'/'Falso'.
-  'explicacao' deve ser um parágrafo detalhado com a fundamentação jurídica ou técnica da resposta.`;
+  IMPORTANTE: 'explicacao' deve focar na fundamentação e 'boardMindset' no estilo de cobrança.`;
   
   try {
-    const res = await executeWithFallback(prompt, "Crie simulados que desafiem o nível de aprovação.", true);
+    const res = await executeWithFallback(prompt, "Crie questões que usem as pegadinhas semânticas típicas da banca informada.", true);
     const parsed = parseFlexibleJSON(res.text);
     return {
       passage: parsed.passage,
@@ -146,18 +161,13 @@ export async function generateSubjectQuestions(
   numQuestao: number,
   banca: string
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
-  const prompt = `Gere ${numQuestao} questões de "${materia}" da banca "${banca}". 
-  JSON: { 
-    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao }>, 
-    "diagnostic": { "level": "Avançado", "avgScoreRequired": "85%" } 
-  }.
-  O campo 'explicacao' é obrigatório e deve ser detalhado.`;
+  const prompt = `Gere ${numQuestao} questões de "${materia}" estilo "${banca}". 
+  JSON: { "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao, boardMindset }> }.`;
 
   try {
-    const res = await executeWithFallback(prompt, "Foque na recorrência tática da disciplina.", true);
+    const res = await executeWithFallback(prompt, "Foque nos padrões mentais de cobrança da disciplina.", true);
     const parsed = parseFlexibleJSON(res.text);
     return {
-      passage: parsed?.passage,
       questions: parsed?.questions?.slice(0, numQuestao) || [],
       sources: res.sources,
       diagnostic: parsed?.diagnostic
@@ -173,11 +183,9 @@ export async function generateStudyPlan(
   daysPerWeek: number, 
   hoursPerDay: number
 ): Promise<StudyPlan> {
-  const prompt = `Cronograma para "${institution}". ${months} meses, ${daysPerWeek} dias/semana, ${hoursPerDay}h/dia. 
-  JSON: { "title": string, "summary": string, "phases": Array, "criticalTopics": Array, "weeklyRoutine": Array, "proComparison": string }`;
-
+  const prompt = `Cronograma estratégico para "${institution}". JSON: { "title": string, "summary": string, "phases": Array, "criticalTopics": Array, "weeklyRoutine": Array }`;
   try {
-    const res = await executeWithFallback(prompt, "Plano pedagógico de alta performance.", true);
+    const res = await executeWithFallback(prompt, "Planejamento focado em vencer os padrões da banca.", true);
     const plan = parseFlexibleJSON(res.text) as StudyPlan;
     if (plan) plan.sources = res.sources;
     return plan || { title: "Erro", summary: "", phases: [], criticalTopics: [], weeklyRoutine: [] };
