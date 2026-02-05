@@ -7,6 +7,11 @@ interface GeneratedAIResponse {
   sources?: GroundingSource[];
 }
 
+const SYSTEM_INSTRUCTION = `Você é um especialista absoluto em concursos públicos brasileiros, com foco profundo em ANÁLISE DE PADRÕES DE COBRANÇA DE BANCAS EXAMINADORAS.
+Seu papel NÃO é explicar a matéria de forma didática tradicional. Seu papel é analisar COMO a banca pensa, COMO ela cobra e COMO ela induz o candidato ao erro.
+Você deve agir como um decodificador da mente da banca, baseando-se em provas reais, recorrência estatística e forma de redação das questões.
+Toda resposta deve ser estritamente em JSON válido.`;
+
 async function callGeminiProxy(payload: { model: string, contents: any, config?: any }): Promise<any> {
   const response = await fetch('/api/gemini', {
     method: 'POST',
@@ -60,7 +65,7 @@ function extractSources(data: any): GroundingSource[] | undefined {
 
 async function executeWithFallback(
   prompt: string, 
-  systemInstruction: string, 
+  systemInstruction: string = SYSTEM_INSTRUCTION, 
   useSearch: boolean = false,
   model: string = 'gemini-3-flash-preview'
 ): Promise<GeneratedAIResponse> {
@@ -88,8 +93,8 @@ async function executeWithFallback(
 
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
   telemetry.logAICall('gemini-3-flash-preview', `Termômetro Tático: ${concurso}`);
-  const prompt = `Analise o DNA de cobrança para: "${concurso}"${banca ? ` banca: "${banca}"` : ""}. 
-  Não foque apenas no edital, mas em COMO a banca cobra.
+  const prompt = `Realize uma análise profunda de DNA de cobrança para: "${concurso}"${banca ? ` banca: "${banca}"` : ""}.
+  Para cada assunto, forneça a análise estratégica completa.
   JSON esperado: { 
     "concurso": string, 
     "banca": string, 
@@ -99,22 +104,29 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
       "frequency": number, 
       "heatLevel": string, 
       "description": string,
-      "psychology": {
-        "pattern": "Literal" | "Doctrinal" | "Jurisprudential" | "Mixed",
-        "commonTraps": Array<string>,
-        "semanticTriggers": Array<string>,
-        "candidateMistakes": Array<string>,
-        "tacticalAdvice": string
+      "strategicAnalysis": {
+        "tema": string,
+        "banca": string,
+        "nivel_cobranca": "baixo | medio | alto",
+        "frequencia_aproximada": string,
+        "forma_como_a_banca_cobra": string[],
+        "padroes_da_banca": string[],
+        "pegadinhas_frequentes": string[],
+        "erros_comuns_dos_candidatos": string[],
+        "como_acertar_na_prova": string[],
+        "exemplo_comentado": {
+          "enunciado_resumido": string,
+          "analise_da_banca": string,
+          "por_que_os_candidatos_erram": string,
+          "estrategia_para_acertar": string
+        }
       }
     }>, 
     "topQuestions": Array<Question> 
-  }.
-  Cada Question deve ter 'boardMindset' explicando o gatilho da questão.`;
-  
-  const instruction = "Você é um Analista de Inteligência de Concursos. Seu objetivo é dissecar os padrões mentais das bancas examinadoras brasileiras.";
+  }.`;
 
   try {
-    const res = await executeWithFallback(prompt, instruction, true);
+    const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text) as ThermometerData;
     if (parsed) parsed.sources = res.sources;
     return parsed;
@@ -133,16 +145,20 @@ export async function generateExamQuestions(
   estado?: string
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
   telemetry.logAICall('gemini-3-flash-preview', `Simulado Tático: ${concurso}`);
-  const prompt = `Gere ${numQuestao} questões simulando fielmente o estilo da banca "${bancaPreferencia || 'Diversas'}" para o concurso "${concurso}". 
+  const prompt = `Gere ${numQuestao} questões reais para "${concurso}" banca "${bancaPreferencia || 'Diversas'}".
   JSON: { 
     "passage": string, 
-    "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao, boardMindset }>, 
-    "diagnostic": { "proTip": "Dica de como a banca inverte conceitos neste tema." } 
+    "questions": Array<{ 
+      id, text, options, correctAnswer, banca, ano, recorrente, 
+      explicacao, 
+      boardMindset: "DNA técnico de como a banca formulou esta pegadinha específica" 
+    }>, 
+    "diagnostic": { "proTip": "Análise de onde os candidatos mais erram neste perfil de prova" } 
   }.
-  IMPORTANTE: 'explicacao' deve focar na fundamentação e 'boardMindset' no estilo de cobrança.`;
+  A explicação deve ser técnica e mostrar o erro induzido.`;
   
   try {
-    const res = await executeWithFallback(prompt, "Crie questões que usem as pegadinhas semânticas típicas da banca informada.", true);
+    const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     return {
       passage: parsed.passage,
@@ -165,7 +181,7 @@ export async function generateSubjectQuestions(
   JSON: { "questions": Array<{ id, text, options, correctAnswer, banca, ano, recorrente, explicacao, boardMindset }> }.`;
 
   try {
-    const res = await executeWithFallback(prompt, "Foque nos padrões mentais de cobrança da disciplina.", true);
+    const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     return {
       questions: parsed?.questions?.slice(0, numQuestao) || [],
@@ -185,7 +201,7 @@ export async function generateStudyPlan(
 ): Promise<StudyPlan> {
   const prompt = `Cronograma estratégico para "${institution}". JSON: { "title": string, "summary": string, "phases": Array, "criticalTopics": Array, "weeklyRoutine": Array }`;
   try {
-    const res = await executeWithFallback(prompt, "Planejamento focado em vencer os padrões da banca.", true);
+    const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const plan = parseFlexibleJSON(res.text) as StudyPlan;
     if (plan) plan.sources = res.sources;
     return plan || { title: "Erro", summary: "", phases: [], criticalTopics: [], weeklyRoutine: [] };
@@ -197,7 +213,7 @@ export async function generateStudyPlan(
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
   const prompt = "12 concursos confirmados 2024/2025. JSON: { 'predictions': Array }";
   try {
-    const res = await executeWithFallback(prompt, "Radar de editais.", true);
+    const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     return { predictions: parsed?.predictions || [], sources: res.sources };
   } catch (error) {
