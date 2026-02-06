@@ -161,10 +161,10 @@ export async function generateExamQuestions(
     const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     return {
-      passage: parsed.passage,
-      questions: parsed.questions?.slice(0, numQuestao) || [],
+      passage: parsed?.passage,
+      questions: Array.isArray(parsed?.questions) ? parsed.questions.slice(0, numQuestao) : [],
       sources: res.sources,
-      diagnostic: parsed.diagnostic
+      diagnostic: parsed?.diagnostic
     };
   } catch (error) {
     return { questions: [] };
@@ -184,7 +184,7 @@ export async function generateSubjectQuestions(
     const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     return {
-      questions: parsed?.questions?.slice(0, numQuestao) || [],
+      questions: Array.isArray(parsed?.questions) ? parsed.questions.slice(0, numQuestao) : [],
       sources: res.sources,
       diagnostic: parsed?.diagnostic
     };
@@ -211,12 +211,18 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
-  const prompt = "12 concursos confirmados 2024/2025. JSON: { 'predictions': Array }";
+  const prompt = "Aja como um scanner de editais. Forneça 12 concursos confirmados ou previstos para 2024/2025 no Brasil. JSON: { 'predictions': Array<{ name, status, banca, officialLink }> }";
   try {
     const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
-    return { predictions: parsed?.predictions || [], sources: res.sources };
+    
+    // Garantia de retorno seguro
+    return { 
+      predictions: Array.isArray(parsed?.predictions) ? parsed.predictions : [], 
+      sources: res.sources 
+    };
   } catch (error) {
+    console.error("[geminiService] Erro ao buscar previstos:", error);
     return { predictions: [] };
   }
 }
