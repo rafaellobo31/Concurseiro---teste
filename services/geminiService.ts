@@ -211,12 +211,24 @@ export async function generateStudyPlan(
 }
 
 export async function fetchPredictedConcursos(): Promise<PredictedConcursosResponse> {
-  const prompt = "Aja como um scanner de editais. Forneça 12 concursos confirmados ou previstos para 2024/2025 no Brasil. JSON: { 'predictions': Array<{ name, status, banca, officialLink }> }";
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  
+  const prompt = `Aja como um Analista de Inteligência Sênior especializado em curadoria de editais. 
+  Escaneie Diários Oficiais, portais governamentais e páginas de bancas organizadoras para listar concursos REAIS.
+  
+  REGRAS DE CURADORIA:
+  1. TEMPORALIDADE: Apenas concursos de ${currentYear} e ${nextYear}.
+  2. CLASSIFICAÇÃO: Somente "CONFIRMADO" (edital ou autorização oficial) ou "PREVISTO" (base documental ou nota técnica).
+  3. FONTES: Somente links OFICIAIS (gov.br, portais de órgãos ou bancas). EXCLUA blogs, rumores e sites de notícias genéricos.
+  4. VERACIDADE: Se não houver link oficial funcional ou base documental sólida, NÃO inclua o concurso.
+  
+  JSON: { 'predictions': Array<{ name, status: 'CONFIRMADO' | 'PREVISTO', banca, officialLink, year: number }> }`;
+  
   try {
     const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
     const parsed = parseFlexibleJSON(res.text);
     
-    // Garantia de retorno seguro
     return { 
       predictions: Array.isArray(parsed?.predictions) ? parsed.predictions : [], 
       sources: res.sources 
