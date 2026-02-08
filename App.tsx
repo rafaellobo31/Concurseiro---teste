@@ -17,7 +17,7 @@ import UserAnalysisView from './components/UserAnalysisView';
 import BoardErrorMap from './components/BoardErrorMap';
 import UserStatistics from './components/UserStatistics';
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
-import { generateExamQuestions, generateSubjectQuestions, fetchQuestionsDetails } from './services/geminiService';
+import { generateExamQuestions, generateSubjectQuestions, fetchQuestionsDetails, clearSimulationCache } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
 import { telemetry } from './services/telemetry';
@@ -64,6 +64,33 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleAdminSecret);
   }, []);
 
+  /**
+   * Realiza a limpeza absoluta de qualquer metadado de simulado anterior.
+   * Garante que a nova sessão seja determinística e limpa.
+   */
+  const clearSimulationSession = () => {
+    // Chaves específicas de sessão de simulado que podem causar conflito
+    const keysToClear = [
+      'cp_current_user_answers',
+      'cp_active_exam_id',
+      'cp_correction_flag'
+    ];
+    keysToClear.forEach(k => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+
+    // Limpa o cache de IA para evitar reaproveitamento de gabaritos de IDs idênticos
+    clearSimulationCache();
+
+    // Reset rigoroso de estados React
+    setExam(null);
+    setExamDiagnostic(null);
+    setUserAnswers({});
+    setIsCorrected(false);
+    setIsNotFound(false);
+  };
+
   const enrichExamWithDetails = async (questions: Question[]) => {
     if (isFetchingDetails) return;
     setIsFetchingDetails(true);
@@ -97,10 +124,8 @@ const App: React.FC = () => {
     }
 
     if (newView !== 'user_analysis' && newView !== 'planos') {
-      setExam(null);
-      setExamDiagnostic(null);
-      setIsCorrected(false);
-      setUserAnswers({});
+      // Sempre limpa o estado ao navegar entre vistas de geração
+      clearSimulationSession();
     }
     
     setIsNotFound(false);
@@ -155,12 +180,10 @@ const App: React.FC = () => {
       setProWallFeature("acessar e treinar com suas questões favoritas");
       return;
     }
+    
+    // Limpeza mandatória de sessão antes de qualquer geração
+    clearSimulationSession();
     setIsLoading(true);
-    setIsNotFound(false);
-    setExam(null);
-    setExamDiagnostic(null);
-    setUserAnswers({});
-    setIsCorrected(false);
 
     if (isFavOnly && currentUser) {
         if (currentUser.favorites.length < 10) {
@@ -194,12 +217,11 @@ const App: React.FC = () => {
 
   const handleGenerateSubject = async (materia: string, modelo: ModeloQuestao, numQuestao: number, banca: string) => {
     const isPro = currentUser?.isPro || false;
+    
+    // Limpeza mandatória de sessão
+    clearSimulationSession();
     setIsLoading(true);
-    setIsNotFound(false);
-    setExam(null);
-    setExamDiagnostic(null);
-    setUserAnswers({});
-    setIsCorrected(false);
+
     const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
       const data = await generateSubjectQuestions(materia, modelo, finalNumQuestao, banca);
@@ -219,12 +241,10 @@ const App: React.FC = () => {
   };
 
   const handleGenerateFromThermometer = async (concurso: string, subjects: string[], banca: string) => {
+    // Limpeza mandatória de sessão
+    clearSimulationSession();
     setIsLoading(true);
-    setIsNotFound(false);
-    setExam(null);
-    setExamDiagnostic(null);
-    setUserAnswers({});
-    setIsCorrected(false);
+
     setView('simulado');
     const combinedQuery = `${concurso} - Foco em: ${subjects.join(', ')}`;
     try {
@@ -245,19 +265,23 @@ const App: React.FC = () => {
 
   const handleCorrection = async () => {
     if (!exam) return;
+    
+    // Garantia de que todos os gabaritos foram carregados antes da correção final
     if (exam.questions.some(q => !q.correctAnswer)) {
       setIsLoading(true);
       await enrichExamWithDetails(exam.questions);
       setIsLoading(false);
     }
 
-    setIsCorrected(true);
     let correct = 0;
     exam.questions.forEach(q => {
+      // Aplica a regra estrita pedida: resposta_do_usuario === alternativa_correta
       const userNorm = normalizeAnswer(userAnswers[q.id]);
       const correctNorm = resolveToCanonical(q.correctAnswer || '', q.options);
       if (userNorm === correctNorm && userNorm !== '') correct++;
     });
+
+    setIsCorrected(true);
 
     if (currentUser) {
       const result: ExamResult = {

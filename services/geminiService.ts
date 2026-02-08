@@ -38,12 +38,25 @@ class CacheManager {
     } catch (e) {}
   }
 
+  clear() {
+    this.cache = {};
+    localStorage.removeItem(CACHE_KEY);
+  }
+
   generateKey(...args: any[]) {
     return args.join('|').toLowerCase();
   }
 }
 
 export const iaCache = new CacheManager();
+
+/**
+ * Garante que a sessão de IA seja reiniciada, eliminando riscos de 
+ * reaproveitamento de IDs de questões e gabaritos de simulados anteriores.
+ */
+export function clearSimulationCache() {
+  iaCache.clear();
+}
 
 interface GeneratedAIResponse {
   text: string;
@@ -265,6 +278,7 @@ export async function fetchPredictedConcursos(): Promise<PredictedConcursosRespo
 
   const prompt = `Radar de concursos 2024/2025. JSON: { 'predictions': Array<{ name, status, banca, officialLink, year }> }`;
   const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);
+  // Fix: Reference correctly the res.text property instead of a non-existent 'text' variable
   const parsed = parseFlexibleJSON(res.text);
   const result = { predictions: Array.isArray(parsed?.predictions) ? parsed.predictions : [], sources: res.sources };
   
