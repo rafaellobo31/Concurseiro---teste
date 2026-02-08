@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Question, ModeloQuestao } from '../types';
 import { normalizeAnswer, resolveToCanonical } from '../utils';
@@ -89,7 +88,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           {question.text}
         </p>
 
-        {/* BLOCO 3 — ALTERNATIVAS (Feedback Visual Detalhado) */}
+        {/* BLOCO 3 — ALTERNATIVAS (Feedback Visual Obrigatório) */}
         <div className="space-y-4 mb-10">
           {question.options?.map((opt, i) => {
             const letter = String.fromCharCode(65 + i);
@@ -108,16 +107,19 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
 
             if (isCorrected) {
               if (isCorrectChoice) {
+                // REGRA FUNDAMENTAL: A correta é SEMPRE VERDE
                 containerStyles = "border-green-500 bg-green-50 ring-2 ring-green-500/20";
                 circleStyles = "bg-green-600 text-white shadow-md shadow-green-200";
                 labelText = "Resposta correta";
                 icon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>;
               } else if (isUserSelected && !isCorrectChoice) {
+                // Escolha errada do usuário em vermelho
                 containerStyles = "border-red-500 bg-red-50 ring-2 ring-red-500/20";
                 circleStyles = "bg-red-600 text-white shadow-md shadow-red-200";
                 labelText = "Você marcou esta alternativa";
                 icon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
               } else {
+                // Outras alternativas neutras
                 containerStyles = "border-gray-100 opacity-40 grayscale-[0.8]";
                 circleStyles = "bg-gray-100 text-gray-400";
               }
@@ -148,11 +150,10 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           })}
         </div>
 
-        {/* BLOCO 4 — RESUMO CLARO E DIDÁTICO */}
+        {/* BLOCO 4 — RESUMO (Manutenção de contraste) */}
         {isCorrected && (
           <div className="mb-10 p-6 md:p-8 bg-slate-900 rounded-[2rem] text-white shadow-xl animate-in fade-in slide-in-from-bottom-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Sua Resposta */}
               <div className="space-y-3">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Sua Resposta:</span>
                 <div className={`flex items-start gap-4 p-4 rounded-2xl ${isUserCorrect ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
@@ -165,7 +166,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
                 </div>
               </div>
 
-              {/* Resposta Correta */}
               <div className="space-y-3">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Gabarito Oficial:</span>
                 <div className="flex items-start gap-4 p-4 rounded-2xl bg-green-500/10 border border-green-500/30">
@@ -181,7 +181,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
           </div>
         )}
 
-        {/* BLOCOS 5 E 6 — JUSTIFICATIVA E MINDSET (Com Paywall) */}
+        {/* BLOCOS 5 E 6 — JUSTIFICATIVA E MINDSET (Inalterados conforme solicitado) */}
         {isCorrected && (
           <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-4 duration-500 w-full">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative">
@@ -202,7 +202,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
                 </div>
               )}
 
-              {/* Justificativa */}
               <div className={`space-y-4 ${!isPro ? 'select-none blur-[20px] grayscale' : ''}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
@@ -215,7 +214,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
                 </div>
               </div>
 
-              {/* Mindset da Banca */}
               <div className={`space-y-4 ${!isPro ? 'select-none blur-[20px] grayscale' : ''}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-indigo-600"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
