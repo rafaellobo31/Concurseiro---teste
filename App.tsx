@@ -13,9 +13,9 @@ import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
 import AdminDashboard from './components/AdminDashboard';
-import UserAnalysisView from './components/UserAnalysisView'; // Import do novo componente
+import UserAnalysisView from './components/UserAnalysisView';
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
-import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
+import { generateExamQuestions, generateSubjectQuestions, fetchQuestionsDetails } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
 import { telemetry } from './services/telemetry';
@@ -34,11 +34,11 @@ const App: React.FC = () => {
   const [isCorrected, setIsCorrected] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [proWallFeature, setProWallFeature] = useState<string | null>(null);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Atalho secreto exclusivo para o proprietário acessar o painel técnico
     const handleAdminSecret = (e: KeyboardEvent) => {
       if (e.altKey && e.shiftKey && e.key === 'A') {
         setView('admin');
@@ -62,6 +62,27 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleAdminSecret);
   }, []);
 
+  // FASE 2: Carregar detalhes em background
+  const enrichExamWithDetails = async (questions: Question[]) => {
+    if (isFetchingDetails) return;
+    setIsFetchingDetails(true);
+    try {
+      const details = await fetchQuestionsDetails(questions, currentUser?.isPro || false);
+      setExam(prev => {
+        if (!prev) return null;
+        const updatedQuestions = prev.questions.map(q => ({
+          ...q,
+          ...(details[q.id] || {})
+        }));
+        return { ...prev, questions: updatedQuestions };
+      });
+    } catch (e) {
+      console.error("Erro ao enriquecer questões:", e);
+    } finally {
+      setIsFetchingDetails(false);
+    }
+  };
+
   const handleViewChange = (newView: AppView | 'admin') => {
     const isPro = currentUser?.isPro || false;
     if ((newView === 'material' || newView === 'termometro') && !isPro) {
@@ -69,7 +90,6 @@ const App: React.FC = () => {
       return; 
     }
     
-    // Reseta estados de simulado ao mudar de tela, a menos que seja para análise
     if (newView !== 'user_analysis' && newView !== 'planos') {
       setExam(null);
       setExamDiagnostic(null);
@@ -150,6 +170,7 @@ const App: React.FC = () => {
     
     const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
+      // FASE 1: Esqueleto (Rápido)
       const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
@@ -157,6 +178,9 @@ const App: React.FC = () => {
         setExam({ title: `Simulado: ${concurso}`, questions: data.questions, passage: data.passage, modalidade, concurso, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+        
+        // FASE 2: Detalhes em background
+        enrichExamWithDetails(data.questions);
       }
     } catch (error) { 
       setIsNotFound(true); 
@@ -179,9 +203,12 @@ const App: React.FC = () => {
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
       } else {
-        setExam({ title: `Simulado: ${materia}`, questions: data.questions, passage: data.passage, materia, sources: data.sources });
+        setExam({ title: `Simulado: ${materia}`, questions: data.questions, materia, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+        
+        // FASE 2: Detalhes em background
+        enrichExamWithDetails(data.questions);
       }
     } catch (error) { 
       setIsNotFound(true); 
@@ -204,9 +231,9 @@ const App: React.FC = () => {
       if (!data || !data.questions || data.questions.length === 0) {
         setIsNotFound(true);
       } else {
-        setExam({ title: `Simulado Tático: ${concurso}`, questions: data.questions, passage: data.passage, concurso, sources: data.sources });
+        setExam({ title: `Simulado Tático: ${concurso}`, questions: data.questions, concurso, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
-        setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+        enrichExamWithDetails(data.questions);
       }
     } catch (error) {
       setIsNotFound(true);
@@ -215,13 +242,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCorrection = () => {
+  const handleCorrection = async () => {
     if (!exam) return;
+    
+    // Se ainda estiver buscando detalhes, aguarda ou força busca síncrona se necessário
+    if (exam.questions.some(q => !q.correctAnswer)) {
+      setIsLoading(true); // Re-ativa loading visual enquanto finaliza detalhes
+      await enrichExamWithDetails(exam.questions);
+      setIsLoading(false);
+    }
+
     setIsCorrected(true);
     let correct = 0;
     exam.questions.forEach(q => {
-      if (normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)) correct++;
+      if (normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer || '', q.options)) correct++;
     });
+
     if (currentUser) {
       const result: ExamResult = {
         id: Math.random().toString(36).substr(2, 9),
@@ -255,11 +291,10 @@ const App: React.FC = () => {
     proExpiry: currentUser?.proExpiry
   };
 
-  // Cálculo de acertos atual para passar para a análise
-  const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length : 0;
+  const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer || '', q.options)).length : 0;
 
   const renderContent = () => {
-    if (view === 'admin') return <AdminDashboard />; // Painel exclusivo do dono
+    if (view === 'admin') return <AdminDashboard />;
     if (view === 'user_analysis') {
       return (
         <UserAnalysisView 
@@ -305,7 +340,6 @@ const App: React.FC = () => {
 
         {exam && (
           <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            {/* Header do Resultado Corrigido: agora redireciona para user_analysis */}
             {isCorrected && (
                <div className="bg-slate-900 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5">
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
@@ -317,7 +351,6 @@ const App: React.FC = () => {
                         </p>
                      </div>
                      <div className="flex flex-col gap-4 w-full md:w-auto">
-                        {/* Redirecionamento corrigido para UserAnalysisView */}
                         <button onClick={() => setView('user_analysis')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                            VER ANÁLISE COMPLETA
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -339,6 +372,12 @@ const App: React.FC = () => {
                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">Simulado Ativo</p>
                    <h2 className="text-xl md:text-2xl font-black text-gray-900">{exam.title}</h2>
                  </div>
+                 {isFetchingDetails && (
+                   <div className="flex items-center gap-2 text-indigo-500 font-black text-[10px] uppercase animate-pulse">
+                     <div className="w-4 h-4 border-2 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
+                     Analisando detalhes em background...
+                   </div>
+                 )}
               </div>
             )}
 
@@ -368,8 +407,12 @@ const App: React.FC = () => {
 
             {!isCorrected && (
               <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-2xl flex flex-col items-center gap-6">
-                <button onClick={handleCorrection} className="w-full max-w-md bg-indigo-600 text-white py-6 rounded-2xl font-black text-xl shadow-2xl hover:bg-indigo-700 transition-all">
-                  FINALIZAR E CORRIGIR
+                <button 
+                  onClick={handleCorrection} 
+                  disabled={isLoading}
+                  className="w-full max-w-md bg-indigo-600 text-white py-6 rounded-2xl font-black text-xl shadow-2xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+                >
+                  {isLoading ? 'PREPARANDO GABARITO...' : 'FINALIZAR E CORRIGIR'}
                 </button>
               </div>
             )}

@@ -48,12 +48,12 @@ export interface Question {
   id: string;
   text: string;
   options?: string[];
-  correctAnswer: string;
+  correctAnswer?: string; // Opcional para carregamento rápido
   banca: string;
   ano: number;
   recorrente: boolean;
-  explicacao: string;
-  boardMindset?: string;
+  explicacao?: string; // Opcional para carregamento rápido
+  boardMindset?: string; // Opcional para carregamento rápido
 }
 
 export interface ExamResult {
@@ -66,13 +66,6 @@ export interface ExamResult {
   userAnswers: Record<string, string>;
 }
 
-export interface StudyPhase {
-  name: string;
-  duration: string;
-  objective: string;
-  subjects: string[];
-}
-
 export interface StudyPlan {
   id?: string;
   date?: number;
@@ -82,6 +75,13 @@ export interface StudyPlan {
   criticalTopics: string[];
   weeklyRoutine: string[];
   sources?: GroundingSource[];
+}
+
+export interface StudyPhase {
+  name: string;
+  duration: string;
+  objective: string;
+  subjects: string[];
 }
 
 export interface User {
@@ -105,14 +105,6 @@ export interface Exam {
   sources?: GroundingSource[];
 }
 
-export interface BoardPsychology {
-  pattern: 'Literal' | 'Doctrinal' | 'Jurisprudential' | 'Mixed';
-  commonTraps: string[];
-  semanticTriggers: string[];
-  candidateMistakes: string[];
-  tacticalAdvice: string;
-}
-
 export interface ThermometerData {
   concurso: string;
   banca: string;
@@ -121,11 +113,11 @@ export interface ThermometerData {
     frequency: number;
     heatLevel: 'High' | 'Medium' | 'Low';
     description: string;
-    psychology?: BoardPsychology;
+    psychology?: any;
     strategicAnalysis?: BoardAnalysis;
   }[];
   analysis: string;
-  topExamples?: BoardDNAItem[]; // Alterado de topQuestions para topExamples
+  topExamples?: BoardDNAItem[];
   sources?: GroundingSource[];
 }
 
@@ -134,6 +126,7 @@ export interface PredictedConcurso {
   status: string;
   banca: string;
   officialLink: string;
+  year?: number;
 }
 
 export interface PredictedConcursosResponse {
