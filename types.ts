@@ -14,6 +14,18 @@ export interface GroundingSource {
   uri: string;
 }
 
+export interface BoardDNAItem {
+  id: string;
+  question: string;
+  correctAnswer: string;
+  justification: string;
+  bancaMindset: string;
+  armadilhaComum: string;
+  referenciaLegal: string;
+  ano: number;
+  banca: string;
+}
+
 export interface BoardAnalysis {
   tema: string;
   banca: string;
@@ -41,7 +53,7 @@ export interface Question {
   ano: number;
   recorrente: boolean;
   explicacao: string;
-  boardMindset?: string; // Novo campo para o DNA da banca na questão
+  boardMindset?: string;
 }
 
 export interface ExamResult {
@@ -110,10 +122,10 @@ export interface ThermometerData {
     heatLevel: 'High' | 'Medium' | 'Low';
     description: string;
     psychology?: BoardPsychology;
-    strategicAnalysis?: BoardAnalysis; // Nova análise profunda
+    strategicAnalysis?: BoardAnalysis;
   }[];
   analysis: string;
-  topQuestions?: Question[];
+  topExamples?: BoardDNAItem[]; // Alterado de topQuestions para topExamples
   sources?: GroundingSource[];
 }
 

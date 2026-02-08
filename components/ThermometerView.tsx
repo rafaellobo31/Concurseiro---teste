@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ThermometerData, UserPlan, Modalidade, Question, ModeloQuestao } from '../types';
+import { ThermometerData, UserPlan, Modalidade, Question, ModeloQuestao, BoardDNAItem as BoardDNAItemType } from '../types';
 import { fetchThermometerData } from '../services/geminiService';
-import QuestionItem from './QuestionItem';
+import BoardDNAItem from './BoardDNAItem';
 
 interface ThermometerViewProps {
   userPlan: UserPlan;
@@ -32,7 +32,6 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
   const [data, setData] = useState<ThermometerData | null>(null);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [showBancaAutocomplete, setShowBancaAutocomplete] = useState(false);
-  const [showQuestions, setShowQuestions] = useState(false);
   
   const autocompleteRef = useRef<HTMLDivElement>(null);
   const bancaRef = useRef<HTMLDivElement>(null);
@@ -62,7 +61,6 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
     if (!concurso) return;
     setLoading(true);
     setData(null);
-    setShowQuestions(false);
     try {
       const res = await fetchThermometerData(concurso, banca);
       setData(res);
@@ -220,22 +218,18 @@ const ThermometerView: React.FC<ThermometerViewProps> = ({ userPlan, onUpgrade, 
             ))}
           </div>
 
-          {data.topQuestions && (
+          {data.topExamples && data.topExamples.length > 0 && (
             <div className="space-y-6">
               <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
                 Exemplos Práticos de DNA de Banca
               </h4>
-              <div className="grid gap-6">
-                {data.topQuestions.map((q, idx) => (
-                  <QuestionItem 
-                    key={idx}
-                    question={q}
-                    index={idx}
-                    modelo={q.options ? ModeloQuestao.MULTIPLA_ESCOLHA : ModeloQuestao.VERDADEIRO_FALSO}
-                    selectedAnswer={null}
-                    onSelect={() => {}}
-                    isCorrected={true}
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest -mt-4 mb-4">Questões resolvidas com análise tática</p>
+              <div className="grid gap-8">
+                {data.topExamples.map((item, idx) => (
+                  <BoardDNAItem 
+                    key={item.id || idx}
+                    item={item}
                     isPro={userPlan.isPro}
                     onUpgrade={onUpgrade}
                   />

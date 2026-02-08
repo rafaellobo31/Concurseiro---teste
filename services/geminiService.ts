@@ -1,5 +1,5 @@
 
-import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse } from "../types";
+import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem } from "../types";
 import { telemetry } from "./telemetry";
 
 interface GeneratedAIResponse {
@@ -94,7 +94,11 @@ async function executeWithFallback(
 export async function fetchThermometerData(concurso: string, banca?: string): Promise<ThermometerData | null> {
   telemetry.logAICall('gemini-3-flash-preview', `Termômetro Tático: ${concurso}`);
   const prompt = `Realize uma análise profunda de DNA de cobrança para: "${concurso}"${banca ? ` banca: "${banca}"` : ""}.
-  Para cada assunto, forneça a análise estratégica completa.
+  
+  REGRAS PARA EXEMPLOS PRÁTICOS (DNA_BANCA):
+  Os exemplos NÃO são simulados interativos. São questões RESOLVIDAS para estudo estratégico.
+  Não use "options", não use radio buttons. Exiba o gabarito e a análise mental da banca.
+  
   JSON esperado: { 
     "concurso": string, 
     "banca": string, 
@@ -122,7 +126,17 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
         }
       }
     }>, 
-    "topQuestions": Array<Question> 
+    "topExamples": Array<{
+      "id": string,
+      "question": string,
+      "correctAnswer": string,
+      "justification": string,
+      "bancaMindset": string,
+      "armadilhaComum": string,
+      "referenciaLegal": string,
+      "ano": number,
+      "banca": string
+    }> 
   }.`;
 
   try {
