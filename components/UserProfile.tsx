@@ -34,8 +34,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
       showMsg('Senha atual incorreta.', 'error');
       return;
     }
-    if (newPass.length < 8) {
-      showMsg('A nova senha deve ter pelo menos 8 caracteres.', 'error');
+    // Nova regra: 6 a 8 caracteres
+    if (newPass.length < 6 || newPass.length > 8) {
+      showMsg('A nova senha deve ter entre 6 e 8 caracteres.', 'error');
       return;
     }
     onUpdate({ passwordHash: newPass });

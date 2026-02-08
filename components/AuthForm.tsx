@@ -16,8 +16,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
 
   const validatePassword = (pass: string) => {
-    // 8+ caracteres, 1 maiúscula, 1 minúscula, 1 número, 1 especial
-    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    // 6 a 8 caracteres, permitindo letras, números e caracteres especiais
+    const regex = /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{6,8}$/;
     return regex.test(pass);
   };
 
@@ -58,7 +58,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         return;
       }
       if (!validatePassword(password)) {
-        setError('Senha fraca: use 8+ caracteres, maiúsculas, números e símbolos.');
+        setError('Senha inválida: use de 6 a 8 caracteres (letras, números ou símbolos).');
         return;
       }
       
