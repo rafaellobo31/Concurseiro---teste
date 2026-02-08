@@ -14,6 +14,8 @@ import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
 import AdminDashboard from './components/AdminDashboard';
 import UserAnalysisView from './components/UserAnalysisView';
+import BoardErrorMap from './components/BoardErrorMap';
+import UserStatistics from './components/UserStatistics';
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
 import { generateExamQuestions, generateSubjectQuestions, fetchQuestionsDetails } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
@@ -62,7 +64,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleAdminSecret);
   }, []);
 
-  // FASE 2: Carregar detalhes em background
   const enrichExamWithDetails = async (questions: Question[]) => {
     if (isFetchingDetails) return;
     setIsFetchingDetails(true);
@@ -85,11 +86,16 @@ const App: React.FC = () => {
 
   const handleViewChange = (newView: AppView | 'admin') => {
     const isPro = currentUser?.isPro || false;
-    if ((newView === 'material' || newView === 'termometro') && !isPro) {
-      setProWallFeature(newView === 'material' ? "gerar cronogramas táticos e personalizados de estudo" : "acessar o termômetro de recorrência de questões");
+    
+    if (newView === 'material' && !isPro) {
+      setProWallFeature("gerar cronogramas táticos e personalizados de estudo");
       return; 
     }
-    
+    if (newView === 'termometro' && !isPro) {
+      setProWallFeature("acessar o termômetro de recorrência de questões e DNA da banca");
+      return;
+    }
+
     if (newView !== 'user_analysis' && newView !== 'planos') {
       setExam(null);
       setExamDiagnostic(null);
@@ -170,7 +176,6 @@ const App: React.FC = () => {
     
     const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
-      // FASE 1: Esqueleto (Rápido)
       const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
@@ -178,8 +183,6 @@ const App: React.FC = () => {
         setExam({ title: `Simulado: ${concurso}`, questions: data.questions, passage: data.passage, modalidade, concurso, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-        
-        // FASE 2: Detalhes em background
         enrichExamWithDetails(data.questions);
       }
     } catch (error) { 
@@ -206,8 +209,6 @@ const App: React.FC = () => {
         setExam({ title: `Simulado: ${materia}`, questions: data.questions, materia, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-        
-        // FASE 2: Detalhes em background
         enrichExamWithDetails(data.questions);
       }
     } catch (error) { 
@@ -244,10 +245,8 @@ const App: React.FC = () => {
 
   const handleCorrection = async () => {
     if (!exam) return;
-    
-    // Se ainda estiver buscando detalhes, aguarda ou força busca síncrona se necessário
     if (exam.questions.some(q => !q.correctAnswer)) {
-      setIsLoading(true); // Re-ativa loading visual enquanto finaliza detalhes
+      setIsLoading(true);
       await enrichExamWithDetails(exam.questions);
       setIsLoading(false);
     }
@@ -257,10 +256,7 @@ const App: React.FC = () => {
     exam.questions.forEach(q => {
       const userNorm = normalizeAnswer(userAnswers[q.id]);
       const correctNorm = resolveToCanonical(q.correctAnswer || '', q.options);
-      
-      if (userNorm === correctNorm && userNorm !== '') {
-        correct++;
-      }
+      if (userNorm === correctNorm && userNorm !== '') correct++;
     });
 
     if (currentUser) {
@@ -315,6 +311,14 @@ const App: React.FC = () => {
           onBack={() => setView('simulado')}
         />
       );
+    }
+    if (view === 'error_map') {
+      if (!currentUser) return <AuthForm onLogin={handleLogin} />;
+      return <BoardErrorMap email={currentUser.email} userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} />;
+    }
+    if (view === 'statistics') {
+      if (!currentUser) return <AuthForm onLogin={handleLogin} />;
+      return <UserStatistics email={currentUser.email} userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} />;
     }
     if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!currentUser} />;
     if (view === 'auth') return <AuthForm onLogin={handleLogin} />;

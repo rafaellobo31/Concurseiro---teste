@@ -48,12 +48,12 @@ export interface Question {
   id: string;
   text: string;
   options?: string[];
-  correctAnswer?: string; // Opcional para carregamento rápido
+  correctAnswer?: string;
   banca: string;
   ano: number;
   recorrente: boolean;
-  explicacao?: string; // Opcional para carregamento rápido
-  boardMindset?: string; // Opcional para carregamento rápido
+  explicacao?: string;
+  boardMindset?: string;
 }
 
 export interface ExamResult {
@@ -64,6 +64,36 @@ export interface ExamResult {
   total: number;
   questions: Question[];
   userAnswers: Record<string, string>;
+}
+
+export interface BoardErrorAnalysis {
+  banca: string;
+  totalQuestions: number;
+  errors: number;
+  errorRate: number;
+  mostMissedSubjects: string[];
+  aiTacticalAnalysis?: {
+    mindset: string;
+    traps: string[];
+  };
+}
+
+export interface SubjectStat {
+  name: string;
+  total: number;
+  hits: number;
+  percentage: number;
+  status: 'Crítico' | 'Atenção' | 'Bom' | 'Excelente';
+}
+
+export interface UserStatisticsData {
+  totalQuestions: number;
+  totalHits: number;
+  overallPercentage: number;
+  evolution: { date: string; percentage: number }[];
+  subjects: SubjectStat[];
+  bancas: { name: string; percentage: number }[];
+  aiRecommendations?: string;
 }
 
 export interface StudyPlan {
@@ -134,7 +164,7 @@ export interface PredictedConcursosResponse {
   sources?: GroundingSource[];
 }
 
-export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis';
+export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis' | 'error_map' | 'statistics';
 
 export interface UserPlan {
   isPro: boolean;

@@ -1,4 +1,5 @@
-import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem } from "../types";
+
+import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem, UserStatisticsData } from "../types";
 import { telemetry } from "./telemetry";
 
 const CACHE_KEY = 'cpro_ia_cache_v2';
@@ -24,7 +25,6 @@ class CacheManager {
 
   get(key: string) {
     const entry = this.cache[key];
-    // Cache expira em 7 dias
     if (entry && Date.now() - entry.timestamp < 7 * 24 * 60 * 60 * 1000) {
       return entry.data;
     }
@@ -103,8 +103,26 @@ async function executeWithFallback(
   };
 }
 
-// FASE 1: Geração rápida de esqueletos de questões
-// Added diagnostic property to Promise return type
+export async function fetchIntelligentRecommendations(stats: UserStatisticsData): Promise<string> {
+  const cacheKey = iaCache.generateKey('stats_recommendations', stats.totalQuestions, stats.overallPercentage);
+  const cached = iaCache.get(cacheKey);
+  if (cached) return cached;
+
+  telemetry.logAICall('gemini-3-flash-preview', 'Recomendações Estatísticas');
+  const prompt = `Analise estas estatísticas de um aluno de concursos e forneça uma recomendação PRÁTICA e TÁTICA de estudo.
+  Status Geral: ${stats.overallPercentage}% de acertos em ${stats.totalQuestions} questões.
+  Disciplinas Críticas: ${stats.subjects.filter(s => s.status === 'Crítico').map(s => s.name).join(', ')}.
+  Disciplinas Boas: ${stats.subjects.filter(s => s.status === 'Bom').map(s => s.name).join(', ')}.
+  Banca com maior dificuldade: ${stats.bancas.length > 0 ? stats.bancas[stats.bancas.length - 1].name : 'N/A'}.
+  JSON: { "recommendation": "Texto direto e mentor com orientações de estudo" }`;
+
+  const res = await executeWithFallback(prompt);
+  const parsed = parseFlexibleJSON(res.text);
+  const text = parsed?.recommendation || "Continue focado na resolução de questões das bancas principais.";
+  iaCache.set(cacheKey, text);
+  return text;
+}
+
 export async function generateExamSkeleton(
   modalidade: Modalidade,
   concurso: string,
@@ -118,8 +136,6 @@ export async function generateExamSkeleton(
   if (cached) return cached;
 
   telemetry.logAICall('gemini-3-flash-preview', `Fase 1 Skeleton: ${concurso}`);
-  
-  // Updated prompt to include diagnostic information required by the UI
   const prompt = `Gere ${numQuestao} questões de concurso para "${concurso}" banca "${banca}". 
   JSON: { "passage": string, "questions": Array<{ id, text, options: string[], banca, ano, recorrente: boolean }>, "diagnostic": { "proTip": string, "difficultyLevel": string } }.
   NÃO gere gabarito nem explicações nesta fase.`;
@@ -137,7 +153,6 @@ export async function generateExamSkeleton(
   return result;
 }
 
-// FASE 2: Geração de detalhes (Gabarito, Explicação, Mindset) sob demanda
 export async function fetchQuestionsDetails(questions: Question[], isPro: boolean): Promise<Record<string, Partial<Question>>> {
   const detailsToFetch = questions.filter(q => !q.correctAnswer);
   if (detailsToFetch.length === 0) return {};
@@ -147,7 +162,6 @@ export async function fetchQuestionsDetails(questions: Question[], isPro: boolea
   if (cached) return cached;
 
   telemetry.logAICall('gemini-3-flash-preview', `Fase 2 Details: ${questions.length} q`);
-
   const prompt = `Para estas questões de concurso, forneça o gabarito e a explicação técnica.
   ${isPro ? 'Inclua o Mindset da Banca (como ela cobra esse tema).' : 'Explicação resumida.'}
   Questões: ${JSON.stringify(detailsToFetch.map(q => ({ id: q.id, text: q.text })))}
@@ -156,12 +170,25 @@ export async function fetchQuestionsDetails(questions: Question[], isPro: boolea
   const res = await executeWithFallback(prompt, "Analista sênior de gabaritos.");
   const parsed = parseFlexibleJSON(res.text);
   const details = parsed?.details || {};
-  
   iaCache.set(batchKey, details);
   return details;
 }
 
-// Mantendo compatibilidade mas otimizando internamente
+export async function fetchBancaTacticalAnalysis(banca: string, missedSubjects: string[]): Promise<any> {
+  const cacheKey = iaCache.generateKey('banca_tactical', banca, ...missedSubjects);
+  const cached = iaCache.get(cacheKey);
+  if (cached) return cached;
+
+  telemetry.logAICall('gemini-3-flash-preview', `Análise Tática Banca: ${banca}`);
+  const prompt = `Analise o perfil de cobrança da banca "${banca}" focado nos assuntos onde o candidato mais errou: ${missedSubjects.join(', ')}.
+  JSON: { "mindset": "Descrição técnica de como a banca pensa e redige questões destes temas", "traps": ["Bullet 1 de armadilha", "Bullet 2"] }`;
+
+  const res = await executeWithFallback(prompt);
+  const parsed = parseFlexibleJSON(res.text);
+  if (parsed) iaCache.set(cacheKey, parsed);
+  return parsed;
+}
+
 export async function generateExamQuestions(
   modalidade: Modalidade,
   concurso: string,
@@ -174,7 +201,6 @@ export async function generateExamQuestions(
   return generateExamSkeleton(modalidade, concurso, modelo, numQuestao, bancaPreferencia || 'Diversas', estado);
 }
 
-// Added diagnostic property to Promise return type
 export async function generateSubjectQuestions(
   materia: string,
   modelo: ModeloQuestao,
@@ -185,7 +211,6 @@ export async function generateSubjectQuestions(
   const cached = iaCache.get(cacheKey);
   if (cached) return cached;
 
-  // Updated prompt to include diagnostic information required by the UI
   const prompt = `Gere ${numQuestao} questões de "${materia}" banca "${banca}". 
   JSON: { "questions": Array<{ id, text, options: string[], banca, ano, recorrente: boolean }>, "diagnostic": { "proTip": string, "difficultyLevel": string } }.`;
 
