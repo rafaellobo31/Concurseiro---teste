@@ -48,11 +48,11 @@ export interface Question {
   id: string;
   text: string;
   options?: string[];
-  correctAnswer?: string;
+  correctAnswer: string;
   banca: string;
   ano: number;
   recorrente: boolean;
-  explicacao?: string;
+  explicacao: string;
   boardMindset?: string;
 }
 
@@ -66,34 +66,11 @@ export interface ExamResult {
   userAnswers: Record<string, string>;
 }
 
-export interface BoardErrorAnalysis {
-  banca: string;
-  totalQuestions: number;
-  errors: number;
-  errorRate: number;
-  mostMissedSubjects: string[];
-  aiTacticalAnalysis?: {
-    mindset: string;
-    traps: string[];
-  };
-}
-
-export interface SubjectStat {
+export interface StudyPhase {
   name: string;
-  total: number;
-  hits: number;
-  percentage: number;
-  status: 'Crítico' | 'Atenção' | 'Bom' | 'Excelente';
-}
-
-export interface UserStatisticsData {
-  totalQuestions: number;
-  totalHits: number;
-  overallPercentage: number;
-  evolution: { date: string; percentage: number }[];
-  subjects: SubjectStat[];
-  bancas: { name: string; percentage: number }[];
-  aiRecommendations?: string;
+  duration: string;
+  objective: string;
+  subjects: string[];
 }
 
 export interface StudyPlan {
@@ -105,13 +82,6 @@ export interface StudyPlan {
   criticalTopics: string[];
   weeklyRoutine: string[];
   sources?: GroundingSource[];
-}
-
-export interface StudyPhase {
-  name: string;
-  duration: string;
-  objective: string;
-  subjects: string[];
 }
 
 export interface User {
@@ -135,6 +105,14 @@ export interface Exam {
   sources?: GroundingSource[];
 }
 
+export interface BoardPsychology {
+  pattern: 'Literal' | 'Doctrinal' | 'Jurisprudential' | 'Mixed';
+  commonTraps: string[];
+  semanticTriggers: string[];
+  candidateMistakes: string[];
+  tacticalAdvice: string;
+}
+
 export interface ThermometerData {
   concurso: string;
   banca: string;
@@ -143,11 +121,11 @@ export interface ThermometerData {
     frequency: number;
     heatLevel: 'High' | 'Medium' | 'Low';
     description: string;
-    psychology?: any;
+    psychology?: BoardPsychology;
     strategicAnalysis?: BoardAnalysis;
   }[];
   analysis: string;
-  topExamples?: BoardDNAItem[];
+  topExamples?: BoardDNAItem[]; // Alterado de topQuestions para topExamples
   sources?: GroundingSource[];
 }
 
@@ -156,7 +134,6 @@ export interface PredictedConcurso {
   status: string;
   banca: string;
   officialLink: string;
-  year?: number;
 }
 
 export interface PredictedConcursosResponse {
@@ -164,7 +141,7 @@ export interface PredictedConcursosResponse {
   sources?: GroundingSource[];
 }
 
-export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis' | 'error_map' | 'statistics';
+export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis';
 
 export interface UserPlan {
   isPro: boolean;
