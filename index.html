@@ -3,7 +3,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Concurseiro Pro</title>
     
     <!-- Shim Crítico para evitar erro de 'process is not defined' -->
@@ -17,12 +17,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
-        body {
+        html, body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
+            max-width: 100%;
+            overflow-x: hidden;
+            position: relative;
+            margin: 0;
+            padding: 0;
         }
         .exam-font {
             font-family: 'Merriweather', serif;
+        }
+        /* Garantia extra contra overflow em containers flex/grid */
+        * {
+            box-sizing: border-box;
         }
     </style>
 

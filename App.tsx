@@ -255,7 +255,12 @@ const App: React.FC = () => {
     setIsCorrected(true);
     let correct = 0;
     exam.questions.forEach(q => {
-      if (normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer || '', q.options)) correct++;
+      const userNorm = normalizeAnswer(userAnswers[q.id]);
+      const correctNorm = resolveToCanonical(q.correctAnswer || '', q.options);
+      
+      if (userNorm === correctNorm && userNorm !== '') {
+        correct++;
+      }
     });
 
     if (currentUser) {
@@ -291,7 +296,11 @@ const App: React.FC = () => {
     proExpiry: currentUser?.proExpiry
   };
 
-  const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer || '', q.options)).length : 0;
+  const currentScore = exam ? exam.questions.filter(q => {
+    const u = normalizeAnswer(userAnswers[q.id]);
+    const c = resolveToCanonical(q.correctAnswer || '', q.options);
+    return u === c && u !== '';
+  }).length : 0;
 
   const renderContent = () => {
     if (view === 'admin') return <AdminDashboard />;
@@ -323,40 +332,40 @@ const App: React.FC = () => {
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
 
     return (
-      <div className="space-y-12 py-8">
+      <div className="space-y-12 py-8 w-full overflow-x-hidden">
         {!exam && !isLoading && (
-          <div className="animate-in fade-in duration-500">
+          <div className="animate-in fade-in duration-500 w-full">
             {view === 'simulado' && <ExamForm onGenerate={handleGenerateOrg} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} hasFavorites={currentUser?.favorites ? currentUser.favorites.length > 0 : false} />}
             {view === 'materias' && <SimuladosMateriasForm onGenerate={handleGenerateSubject} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} />}
           </div>
         )}
 
         {isLoading && (
-          <div className="text-center py-20">
+          <div className="text-center py-20 w-full">
             <div className="w-12 h-12 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
             <p className="font-black text-indigo-600 animate-pulse text-xs uppercase tracking-[0.2em]">Sincronizando com Bases Reais...</p>
           </div>
         )}
 
         {exam && (
-          <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500 w-full max-w-full">
             {isCorrected && (
-               <div className="bg-slate-900 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5">
+               <div className="bg-slate-900 p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5 w-full">
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                      <div className="text-center md:text-left">
                         <span className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2 block">Diagnóstico de Performance</span>
-                        <h2 className="text-4xl font-black mb-4">Você acertou {currentScore} de {exam.questions.length} questões.</h2>
-                        <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
+                        <h2 className="text-2xl md:text-4xl font-black mb-4 break-words">Você acertou {currentScore} de {exam.questions.length} questões.</h2>
+                        <p className="text-slate-400 font-medium max-w-xl text-base md:text-lg leading-relaxed">
                           {examDiagnostic?.proTip || "Você foi bem, mas candidatos aprovados nesta banca costumam ter desempenho superior em questões de recorrência."}
                         </p>
                      </div>
                      <div className="flex flex-col gap-4 w-full md:w-auto">
-                        <button onClick={() => setView('user_analysis')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                        <button onClick={() => setView('user_analysis')} className="w-full md:w-auto bg-indigo-600 text-white px-8 md:px-10 py-4 md:py-5 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                            VER ANÁLISE COMPLETA
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                         </button>
                         {!userPlan.isPro && (
-                          <button onClick={() => handleViewChange('planos')} className="bg-white/10 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 hover:bg-white/20 transition-all">
+                          <button onClick={() => handleViewChange('planos')} className="w-full md:w-auto bg-white/10 text-white px-8 md:px-10 py-4 md:py-5 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest border border-white/10 hover:bg-white/20 transition-all">
                              LIBERAR MÉTODO PRO
                           </button>
                         )}
@@ -367,27 +376,27 @@ const App: React.FC = () => {
             )}
 
             {!isCorrected && (
-              <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-                 <div className="flex-1 text-center md:text-left">
+              <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4 w-full">
+                 <div className="flex-1 text-center md:text-left min-w-0">
                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">Simulado Ativo</p>
-                   <h2 className="text-xl md:text-2xl font-black text-gray-900">{exam.title}</h2>
+                   <h2 className="text-xl md:text-2xl font-black text-gray-900 truncate">{exam.title}</h2>
                  </div>
                  {isFetchingDetails && (
-                   <div className="flex items-center gap-2 text-indigo-500 font-black text-[10px] uppercase animate-pulse">
+                   <div className="flex items-center gap-2 text-indigo-500 font-black text-[10px] uppercase animate-pulse shrink-0">
                      <div className="w-4 h-4 border-2 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
-                     Analisando detalhes em background...
+                     <span className="hidden xs:inline">Analisando detalhes...</span>
                    </div>
                  )}
               </div>
             )}
 
             {exam.passage && (
-              <div className="bg-white p-10 rounded-[2.5rem] border-2 border-indigo-50 shadow-inner italic text-slate-700 leading-relaxed">
+              <div className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border-2 border-indigo-50 shadow-inner italic text-slate-700 leading-relaxed text-sm md:text-base break-words">
                 {exam.passage}
               </div>
             )}
 
-            <div className="grid gap-6">
+            <div className="grid gap-6 w-full max-w-full">
               {exam.questions.map((q, idx) => (
                 <QuestionItem 
                     key={q.id} 
@@ -406,11 +415,11 @@ const App: React.FC = () => {
             </div>
 
             {!isCorrected && (
-              <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-2xl flex flex-col items-center gap-6">
+              <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-indigo-50 shadow-2xl flex flex-col items-center gap-6 w-full">
                 <button 
                   onClick={handleCorrection} 
                   disabled={isLoading}
-                  className="w-full max-w-md bg-indigo-600 text-white py-6 rounded-2xl font-black text-xl shadow-2xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+                  className="w-full max-w-md bg-indigo-600 text-white py-5 md:py-6 rounded-2xl font-black text-lg md:text-xl shadow-2xl hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95"
                 >
                   {isLoading ? 'PREPARANDO GABARITO...' : 'FINALIZAR E CORRIGIR'}
                 </button>
@@ -418,8 +427,8 @@ const App: React.FC = () => {
             )}
             
             {isCorrected && (
-              <div className="flex justify-center pb-12">
-                 <button onClick={() => setExam(null)} className="text-slate-400 font-black text-xs uppercase tracking-widest hover:text-indigo-600 transition-colors">
+              <div className="flex justify-center pb-12 w-full">
+                 <button onClick={() => setExam(null)} className="text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-widest hover:text-indigo-600 transition-colors">
                    Sair do Simulado
                  </button>
               </div>
@@ -431,16 +440,16 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-[#f8fafc] transition-all duration-500`}>
+    <div className={`min-h-screen bg-[#f8fafc] transition-all duration-500 w-full overflow-x-hidden flex flex-col`}>
       <Header userPlan={userPlan} currentView={view as AppView} currentUser={currentUser} onViewChange={handleViewChange} onLogout={handleLogout} />
-      <main className={`max-w-7xl mx-auto px-4 pb-20 pt-8`}>
+      <main className={`max-w-7xl mx-auto px-4 pb-20 pt-8 w-full flex-1`}>
         {proWallFeature && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-            <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl text-center">
-              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Recurso Exclusivo PRO</h3>
-              <p className="text-slate-500 font-medium mb-10 leading-relaxed">Você precisa ser um membro PRO para {proWallFeature}.</p>
-              <button onClick={() => handleViewChange('planos')} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl">LIBERAR AGORA</button>
-              <button onClick={() => setProWallFeature(null)} className="mt-4 w-full text-slate-400 font-black text-xs uppercase tracking-widest">Continuar Grátis</button>
+            <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 md:p-10 shadow-2xl text-center animate-in zoom-in duration-300">
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-4 tracking-tight">Recurso Exclusivo PRO</h3>
+              <p className="text-slate-500 font-medium mb-10 leading-relaxed text-sm md:text-base">Você precisa ser um membro PRO para {proWallFeature}.</p>
+              <button onClick={() => handleViewChange('planos')} className="w-full bg-indigo-600 text-white py-4 md:py-5 rounded-2xl font-black text-base md:text-lg shadow-xl active:scale-95 transition-all">LIBERAR AGORA</button>
+              <button onClick={() => setProWallFeature(null)} className="mt-4 w-full text-slate-400 font-black text-[10px] uppercase tracking-widest">Continuar Grátis</button>
             </div>
           </div>
         )}
