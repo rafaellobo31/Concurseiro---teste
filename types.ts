@@ -4,6 +4,12 @@ export enum Modalidade {
   ESTADUAL = 'Estadual'
 }
 
+export enum Nivel {
+  MEDIO = 'Médio',
+  TECNICO = 'Técnico',
+  SUPERIOR = 'Superior'
+}
+
 export enum ModeloQuestao {
   MULTIPLA_ESCOLHA = 'Múltipla Escolha',
   VERDADEIRO_FALSO = 'Verdadeiro / Falso'
@@ -101,6 +107,8 @@ export interface Exam {
   passage?: string;
   modalidade?: Modalidade;
   concurso?: string;
+  nivel?: Nivel;
+  cargoArea?: string;
   materia?: string;
   sources?: GroundingSource[];
 }
@@ -125,7 +133,7 @@ export interface ThermometerData {
     strategicAnalysis?: BoardAnalysis;
   }[];
   analysis: string;
-  topExamples?: BoardDNAItem[]; // Alterado de topQuestions para topExamples
+  topExamples?: BoardDNAItem[];
   sources?: GroundingSource[];
 }
 

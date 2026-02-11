@@ -1,5 +1,5 @@
 
-import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem } from "../types";
+import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem, Nivel } from "../types";
 import { telemetry } from "./telemetry";
 
 interface GeneratedAIResponse {
@@ -152,6 +152,8 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
 export async function generateExamQuestions(
   modalidade: Modalidade,
   concurso: string,
+  nivel: Nivel | string | undefined,
+  cargoArea: string | undefined,
   modelo: ModeloQuestao,
   numQuestao: number,
   bancaPreferencia?: string,
@@ -159,7 +161,17 @@ export async function generateExamQuestions(
   estado?: string
 ): Promise<{ questions: Question[], passage?: string, sources?: GroundingSource[], diagnostic?: any }> {
   telemetry.logAICall('gemini-3-flash-preview', `Simulado Tático: ${concurso}`);
-  const prompt = `Gere ${numQuestao} questões reais para "${concurso}" banca "${bancaPreferencia || 'Diversas'}".
+  
+  const contextNivel = nivel ? `nível: ${nivel}` : '';
+  const contextCargo = cargoArea ? `cargo/área: ${cargoArea}` : '';
+  
+  const prompt = `Gere EXATAMENTE ${numQuestao} questões reais (ou baseadas em padrões reais) para o concurso "${concurso}" banca "${bancaPreferencia || 'Diversas'}".
+  Contexto adicional: ${contextNivel}, ${contextCargo}.
+  
+  REGRAS DE COMPLEXIDADE:
+  - Se o cargo/área for "Geral" ou não especificado, use o padrão do edital mais recente.
+  - Ajuste o nível de dificuldade técnica conforme o nível: ${nivel || 'Médio'}.
+  
   JSON: { 
     "passage": string, 
     "questions": Array<{ 
@@ -168,8 +180,7 @@ export async function generateExamQuestions(
       boardMindset: "DNA técnico de como a banca formulou esta pegadinha específica" 
     }>, 
     "diagnostic": { "proTip": "Análise de onde os candidatos mais erram neste perfil de prova" } 
-  }.
-  A explicação deve ser técnica e mostrar o erro induzido.`;
+  }.`;
   
   try {
     const res = await executeWithFallback(prompt, SYSTEM_INSTRUCTION, true);

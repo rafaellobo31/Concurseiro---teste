@@ -13,8 +13,8 @@ import AuthForm from './components/AuthForm';
 import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
 import AdminDashboard from './components/AdminDashboard';
-import UserAnalysisView from './components/UserAnalysisView'; // Import do novo componente
-import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode } from './types';
+import UserAnalysisView from './components/UserAnalysisView'; 
+import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
@@ -38,7 +38,6 @@ const App: React.FC = () => {
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Atalho secreto exclusivo para o proprietário acessar o painel técnico
     const handleAdminSecret = (e: KeyboardEvent) => {
       if (e.altKey && e.shiftKey && e.key === 'A') {
         setView('admin');
@@ -69,7 +68,6 @@ const App: React.FC = () => {
       return; 
     }
     
-    // Reseta estados de simulado ao mudar de tela, a menos que seja para análise
     if (newView !== 'user_analysis' && newView !== 'planos') {
       setExam(null);
       setExamDiagnostic(null);
@@ -123,7 +121,7 @@ const App: React.FC = () => {
     alert('Parabéns! Seu acesso PRO foi liberado com sucesso.');
   };
 
-  const handleGenerateOrg = async (modalidade: Modalidade, concurso: string, modelo: ModeloQuestao, numQuestao: number, banca: string, estado?: string, isFavOnly?: boolean) => {
+  const handleGenerateOrg = async (modalidade: Modalidade, concurso: string, nivel: Nivel | string, cargoArea: string, modelo: ModeloQuestao, numQuestao: number, banca: string, estado?: string, isFavOnly?: boolean) => {
     const isPro = currentUser?.isPro || false;
     if (isFavOnly && !isPro) {
       setProWallFeature("acessar e treinar com suas questões favoritas");
@@ -150,11 +148,11 @@ const App: React.FC = () => {
     
     const finalNumQuestao = isPro ? numQuestao : Math.min(numQuestao, 20);
     try {
-      const data = await generateExamQuestions(modalidade, concurso, modelo, finalNumQuestao, banca, 0, estado);
+      const data = await generateExamQuestions(modalidade, concurso, nivel, cargoArea, modelo, finalNumQuestao, banca, 0, estado);
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
       } else {
-        setExam({ title: `Simulado: ${concurso}`, questions: data.questions, passage: data.passage, modalidade, concurso, sources: data.sources });
+        setExam({ title: `Simulado: ${concurso} (${cargoArea})`, questions: data.questions, passage: data.passage, modalidade, concurso, nivel: nivel as Nivel, cargoArea, sources: data.sources });
         setExamDiagnostic(data.diagnostic);
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
@@ -200,7 +198,7 @@ const App: React.FC = () => {
     setView('simulado');
     const combinedQuery = `${concurso} - Foco em: ${subjects.join(', ')}`;
     try {
-      const data = await generateExamQuestions(Modalidade.NACIONAL, combinedQuery, ModeloQuestao.MULTIPLA_ESCOLHA, 10, banca);
+      const data = await generateExamQuestions(Modalidade.NACIONAL, combinedQuery, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 10, banca);
       if (!data || !data.questions || data.questions.length === 0) {
         setIsNotFound(true);
       } else {
@@ -255,11 +253,10 @@ const App: React.FC = () => {
     proExpiry: currentUser?.proExpiry
   };
 
-  // Cálculo de acertos atual para passar para a análise
   const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length : 0;
 
   const renderContent = () => {
-    if (view === 'admin') return <AdminDashboard />; // Painel exclusivo do dono
+    if (view === 'admin') return <AdminDashboard />; 
     if (view === 'user_analysis') {
       return (
         <UserAnalysisView 
@@ -277,7 +274,7 @@ const App: React.FC = () => {
     if (view === 'planos') return <PricingModal onUpgrade={handleUpgrade} onClose={() => handleViewChange('simulado')} />;
     if (view === 'perfil') {
       if (!currentUser) return <AuthForm onLogin={handleLogin} />;
-      return <UserProfile user={currentUser} userPlan={userPlan} onUpdate={handleUpdateUser} onUpgrade={() => handleViewChange('planos')} onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)} />;
+      return <UserProfile user={currentUser} userPlan={userPlan} onUpdate={handleUpdateUser} onUpgrade={() => handleViewChange('planos')} onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)} />;
     }
     if (view === 'historico') {
       if (!currentUser) return <AuthForm onLogin={handleLogin} />;
@@ -285,7 +282,7 @@ const App: React.FC = () => {
     }
     if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!currentUser} />;
     if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={handleGenerateFromThermometer} onShowProWall={setProWallFeature} />;
-    if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
+    if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
 
     return (
       <div className="space-y-12 py-8">
@@ -305,7 +302,6 @@ const App: React.FC = () => {
 
         {exam && (
           <div ref={examRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            {/* Header do Resultado Corrigido: agora redireciona para user_analysis */}
             {isCorrected && (
                <div className="bg-slate-900 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden mb-8 border border-white/5">
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
@@ -317,7 +313,6 @@ const App: React.FC = () => {
                         </p>
                      </div>
                      <div className="flex flex-col gap-4 w-full md:w-auto">
-                        {/* Redirecionamento corrigido para UserAnalysisView */}
                         <button onClick={() => setView('user_analysis')} className="bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                            VER ANÁLISE COMPLETA
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
