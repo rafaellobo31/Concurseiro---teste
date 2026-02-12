@@ -17,10 +17,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Use process.env as standard in this environment
+  // Logs de diagnóstico utilizando o padrão Vite (import.meta.env)
+  // Fix: Cast import.meta to any to resolve TS error when env property is not recognized
   useEffect(() => {
-    console.log("SUPABASE_URL", process.env.VITE_SUPABASE_URL);
-    console.log("HAS_ANON_KEY", !!process.env.VITE_SUPABASE_ANON_KEY);
+    const metaEnv = (import.meta as any).env;
+    console.log("SUPABASE_URL", metaEnv?.VITE_SUPABASE_URL);
+    console.log("HAS_ANON_KEY", !!metaEnv?.VITE_SUPABASE_ANON_KEY);
   }, []);
 
   const validatePassword = (pass: string) => {
@@ -146,7 +148,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isForgot && !isLogin && (
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Como quer ser chamado?</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Como quer ser chamado?</label>
             <input 
               type="text" placeholder="Seu apelido de estudos" required 
               className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
@@ -155,7 +157,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
           </div>
         )}
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Válido</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">E-mail Válido</label>
           <input 
             type="email" placeholder="estudante@exemplo.com" required 
             className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
@@ -164,7 +166,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         </div>
         {!isForgot && (
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Segura</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Senha Segura</label>
             <input 
               type="password" placeholder="••••••••" required 
               className="w-full p-4 rounded-xl border-2 bg-white border-gray-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-900 placeholder:text-slate-400 shadow-sm" 
