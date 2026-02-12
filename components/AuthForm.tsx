@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { supabase } from '../services/supabaseClient';
 import { User } from '../types';
@@ -16,6 +16,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Use process.env as standard in this environment
+  useEffect(() => {
+    console.log("SUPABASE_URL", process.env.VITE_SUPABASE_URL);
+    console.log("HAS_ANON_KEY", !!process.env.VITE_SUPABASE_ANON_KEY);
+  }, []);
 
   const validatePassword = (pass: string) => {
     // 6 a 8 caracteres, permitindo letras, números e caracteres especiais
@@ -62,7 +68,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
       });
 
       if (loginError) {
-        setError('E-mail ou senha incorretos.');
+        console.error("LOGIN_ERROR", loginError);
+        setError(`${loginError.message}${loginError.status ? ` (Status: ${loginError.status})` : ''}`);
       } else if (data.user) {
         // Tenta buscar/criar o perfil local para compatibilidade
         let localUser = db.getUserByEmail(email);
@@ -101,7 +108,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
       });
 
       if (signUpError) {
-        setError(signUpError.message);
+        console.error("SIGNUP_ERROR", signUpError);
+        setError(`${signUpError.message}${signUpError.status ? ` (Status: ${signUpError.status})` : ''}`);
       } else if (data.user) {
         const success = db.register({
           email,

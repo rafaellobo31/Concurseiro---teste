@@ -101,6 +101,7 @@ export interface User {
   savedPlans: StudyPlan[];
 }
 
+// Added banca and estado to Exam interface to match component usage
 export interface Exam {
   title: string;
   questions: Question[];
@@ -110,6 +111,8 @@ export interface Exam {
   nivel?: Nivel;
   cargoArea?: string;
   materia?: string;
+  banca?: string;
+  estado?: string;
   sources?: GroundingSource[];
 }
 
