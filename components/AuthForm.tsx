@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { db } from '../services/db';
+import { supabase } from '../services/supabaseClient';
 import { User } from '../types';
 
 interface AuthFormProps {
@@ -13,6 +14,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const validatePassword = (pass: string) => {
@@ -25,60 +27,97 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
     return /\S+@\S+\.\S+/.test(e);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (isForgot) {
       if (!validateEmail(email)) {
         setError('Por favor, insira um e-mail válido.');
+        setIsLoading(false);
         return;
       }
-      // Simulação de envio de token de recuperação
-      alert(`Instruções de recuperação enviadas para: ${email}. Verifique sua caixa de entrada.`);
-      setIsForgot(false);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+      if (resetError) {
+        setError(resetError.message);
+      } else {
+        alert(`Instruções de recuperação enviadas para: ${email}. Verifique sua caixa de entrada.`);
+        setIsForgot(false);
+      }
+      setIsLoading(false);
       return;
     }
 
     if (!validateEmail(email)) {
       setError('E-mail inválido.');
+      setIsLoading(false);
       return;
     }
 
     if (isLogin) {
-      const user = db.validateCredentials(email, password);
-      if (user) {
-        onLogin(user);
-      } else {
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (loginError) {
         setError('E-mail ou senha incorretos.');
+      } else if (data.user) {
+        // Tenta buscar/criar o perfil local para compatibilidade
+        let localUser = db.getUserByEmail(email);
+        if (!localUser) {
+          db.register({
+            email,
+            passwordHash: password,
+            nickname: email.split('@')[0],
+            isPro: false,
+            favorites: [],
+            history: [],
+            savedPlans: []
+          });
+          localUser = db.getUserByEmail(email);
+        }
+        if (localUser) onLogin(localUser);
       }
     } else {
       if (!nickname || nickname.length < 3) {
         setError('Seu apelido deve ter pelo menos 3 caracteres.');
+        setIsLoading(false);
         return;
       }
       if (!validatePassword(password)) {
         setError('Senha inválida: use de 6 a 8 caracteres (letras, números ou símbolos).');
+        setIsLoading(false);
         return;
       }
       
-      const success = db.register({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
-        passwordHash: password,
-        nickname,
-        isPro: false,
-        favorites: [],
-        history: [],
-        savedPlans: []
+        password,
+        options: {
+          data: { nickname }
+        }
       });
 
-      if (success) {
+      if (signUpError) {
+        setError(signUpError.message);
+      } else if (data.user) {
+        const success = db.register({
+          email,
+          passwordHash: password,
+          nickname,
+          isPro: false,
+          favorites: [],
+          history: [],
+          savedPlans: []
+        });
+
         const newUser = db.getUserByEmail(email);
         if (newUser) onLogin(newUser);
-      } else {
-        setError('Este e-mail já possui um cadastro ativo.');
       }
     }
+    setIsLoading(false);
   };
 
   return (
@@ -133,8 +172,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
           </div>
         )}
 
-        <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-sm tracking-widest uppercase">
-          {isForgot ? 'ENVIAR LINK' : isLogin ? 'ENTRAR NA PLATAFORMA' : 'CRIAR CONTA AGORA'}
+        <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-sm tracking-widest uppercase disabled:opacity-50">
+          {isLoading ? 'PROCESSANDO...' : isForgot ? 'ENVIAR LINK' : isLogin ? 'ENTRAR NA PLATAFORMA' : 'CRIAR CONTA AGORA'}
         </button>
       </form>
 

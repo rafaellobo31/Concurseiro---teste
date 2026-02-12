@@ -19,6 +19,8 @@ import { generateExamQuestions, generateSubjectQuestions } from './services/gemi
 import { normalizeAnswer, resolveToCanonical } from './utils';
 import { db } from './services/db';
 import { telemetry } from './services/telemetry';
+import { supabase } from './services/supabaseClient';
+import { dbService } from './services/dbService';
 
 const SESSION_KEY = 'cp_active_session';
 
@@ -26,6 +28,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView | 'admin'>('home');
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isNotFound, setIsNotFound] = useState(false);
   const [exam, setExam] = useState<Exam | null>(null);
@@ -35,6 +38,10 @@ const App: React.FC = () => {
   const [isHydrated, setIsHydrated] = useState(false);
   const [proWallFeature, setProWallFeature] = useState<string | null>(null);
   
+  // Mapeamento de persistência
+  const [dbSimuladoId, setDbSimuladoId] = useState<string | null>(null);
+  const [idMapping, setIdMapping] = useState<Record<string, { questao_id: string, alternativas: any[] }>>({});
+
   const examRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,20 +52,31 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleAdminSecret);
     
-    const email = localStorage.getItem(SESSION_KEY);
-    if (email) {
-      const user = db.getUserByEmail(email);
-      if (user) {
-        if (user.proExpiry && user.proExpiry < Date.now() && user.isPro) {
-          db.updateUser(email, { isPro: false });
-          setCurrentUser(db.getUserByEmail(email) || null);
-        } else {
-          setCurrentUser(user);
-        }
+    // Auth Supabase
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSupabaseUser(session?.user ?? null);
+      if (session?.user) {
+        // Tenta buscar o perfil local correspondente
+        const user = db.getUserByEmail(session.user.email!);
+        if (user) setCurrentUser(user);
       }
-    }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSupabaseUser(session?.user ?? null);
+      if (session?.user) {
+        const user = db.getUserByEmail(session.user.email!);
+        if (user) setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
     setIsHydrated(true);
-    return () => window.removeEventListener('keydown', handleAdminSecret);
+    return () => {
+      window.removeEventListener('keydown', handleAdminSecret);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleViewChange = (newView: AppView | 'admin') => {
@@ -73,6 +91,8 @@ const App: React.FC = () => {
       setExamDiagnostic(null);
       setIsCorrected(false);
       setUserAnswers({});
+      setDbSimuladoId(null);
+      setIdMapping({});
     }
     
     setIsNotFound(false);
@@ -82,11 +102,11 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem(SESSION_KEY, user.email);
     handleViewChange('simulado');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
     localStorage.removeItem(SESSION_KEY);
     handleViewChange('home');
@@ -107,15 +127,15 @@ const App: React.FC = () => {
   };
 
   const handleUpgrade = () => {
-    if (!currentUser) {
+    if (!supabaseUser) {
       setView('auth');
       setProWallFeature(null);
       return;
     }
     const expiry = Date.now() + (90 * 24 * 60 * 60 * 1000);
-    db.updateUser(currentUser.email, { isPro: true, proExpiry: expiry });
+    db.updateUser(currentUser!.email, { isPro: true, proExpiry: expiry });
     telemetry.logSubscription('Elite 90 Dias', 47.90);
-    setCurrentUser(db.getUserByEmail(currentUser.email) || null);
+    setCurrentUser(db.getUserByEmail(currentUser!.email) || null);
     setProWallFeature(null);
     handleViewChange('perfil');
     alert('Parabéns! Seu acesso PRO foi liberado com sucesso.');
@@ -133,6 +153,8 @@ const App: React.FC = () => {
     setExamDiagnostic(null);
     setUserAnswers({});
     setIsCorrected(false);
+    setDbSimuladoId(null);
+    setIdMapping({});
 
     if (isFavOnly && currentUser) {
         if (currentUser.favorites.length < 10) {
@@ -152,8 +174,27 @@ const App: React.FC = () => {
       if (!data || !data.questions || data.questions.length === 0) { 
         setIsNotFound(true); 
       } else {
-        setExam({ title: `Simulado: ${concurso} (${cargoArea})`, questions: data.questions, passage: data.passage, modalidade, concurso, nivel: nivel as Nivel, cargoArea, sources: data.sources });
+        const examData: Exam = { title: `Simulado: ${concurso} (${cargoArea || 'Geral'})`, questions: data.questions, passage: data.passage, modalidade, concurso, nivel: nivel as Nivel, cargoArea, sources: data.sources, banca, estado };
+        setExam(examData);
         setExamDiagnostic(data.diagnostic);
+        
+        // Persistência Supabase
+        if (supabaseUser) {
+          try {
+            const simuladoDb = await dbService.createSimulado(supabaseUser.id, examData);
+            setDbSimuladoId(simuladoDb.id);
+            const mappingData = await dbService.insertQuestoesEAlternativas(simuladoDb.id, data.questions);
+            
+            const newMapping: Record<string, any> = {};
+            mappingData.forEach(m => {
+              newMapping[m.originalId] = { questao_id: m.questao.id, alternativas: m.alternativas };
+            });
+            setIdMapping(newMapping);
+          } catch (dbError) {
+            console.warn("Supabase: Erro ao persistir simulado, continuando em modo local.", dbError);
+          }
+        }
+
         setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     } catch (error) { 
@@ -213,13 +254,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCorrection = () => {
+  const handleCorrection = async () => {
     if (!exam) return;
     setIsCorrected(true);
     let correct = 0;
     exam.questions.forEach(q => {
       if (normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)) correct++;
     });
+
     if (currentUser) {
       const result: ExamResult = {
         id: Math.random().toString(36).substr(2, 9),
@@ -233,7 +275,27 @@ const App: React.FC = () => {
       db.addExamToHistory(currentUser.email, result);
       setCurrentUser(db.getUserByEmail(currentUser.email) || null);
     }
+
+    // Persistência Final no Supabase
+    if (supabaseUser && dbSimuladoId) {
+      await dbService.saveResultado(supabaseUser.id, dbSimuladoId, exam.questions.length, correct);
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAnswerSelect = async (questaoOriginalId: string, letra: string) => {
+    if (isCorrected) return;
+    setUserAnswers(prev => ({...prev, [questaoOriginalId]: letra}));
+
+    // Persistência em tempo real no Supabase
+    if (supabaseUser && idMapping[questaoOriginalId]) {
+      const { questao_id, alternativas } = idMapping[questaoOriginalId];
+      const selectedAlt = alternativas.find((a: any) => a.letra === letra);
+      if (selectedAlt) {
+        await dbService.saveResposta(supabaseUser.id, questao_id, selectedAlt.id);
+      }
+    }
   };
 
   const handleToggleFav = (q: Question) => {
@@ -269,18 +331,18 @@ const App: React.FC = () => {
         />
       );
     }
-    if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!currentUser} />;
+    if (view === 'home') return <LandingPage onStart={handleViewChange} isLoggedIn={!!supabaseUser} />;
     if (view === 'auth') return <AuthForm onLogin={handleLogin} />;
     if (view === 'planos') return <PricingModal onUpgrade={handleUpgrade} onClose={() => handleViewChange('simulado')} />;
     if (view === 'perfil') {
-      if (!currentUser) return <AuthForm onLogin={handleLogin} />;
-      return <UserProfile user={currentUser} userPlan={userPlan} onUpdate={handleUpdateUser} onUpgrade={() => handleViewChange('planos')} onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)} />;
+      if (!supabaseUser) return <AuthForm onLogin={handleLogin} />;
+      return <UserProfile user={currentUser!} userPlan={userPlan} onUpdate={handleUpdateUser} onUpgrade={() => handleViewChange('planos')} onStartFavExam={() => handleGenerateOrg(Modalidade.NACIONAL, "", "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 0, "", undefined, true)} />;
     }
     if (view === 'historico') {
-      if (!currentUser) return <AuthForm onLogin={handleLogin} />;
-      return <HistoryView history={currentUser.history} />;
+      if (!supabaseUser) return <AuthForm onLogin={handleLogin} />;
+      return <HistoryView history={currentUser?.history || []} />;
     }
-    if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!currentUser} />;
+    if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!supabaseUser} />;
     if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={handleGenerateFromThermometer} onShowProWall={setProWallFeature} />;
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
 
@@ -288,7 +350,17 @@ const App: React.FC = () => {
       <div className="space-y-12 py-8">
         {!exam && !isLoading && (
           <div className="animate-in fade-in duration-500">
-            {view === 'simulado' && <ExamForm onGenerate={handleGenerateOrg} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} hasFavorites={currentUser?.favorites ? currentUser.favorites.length > 0 : false} />}
+            {view === 'simulado' && (
+              <>
+                {!supabaseUser && (
+                  <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl mb-6 text-amber-700 text-xs font-bold flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Dica: Faça login para salvar seu histórico e respostas no banco de dados.
+                  </div>
+                )}
+                <ExamForm onGenerate={handleGenerateOrg} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} hasFavorites={currentUser?.favorites ? currentUser.favorites.length > 0 : false} />
+              </>
+            )}
             {view === 'materias' && <SimuladosMateriasForm onGenerate={handleGenerateSubject} onShowProWall={setProWallFeature} isLoading={isLoading} isPro={userPlan.isPro} />}
           </div>
         )}
@@ -351,7 +423,7 @@ const App: React.FC = () => {
                     index={idx} 
                     modelo={q.options ? ModeloQuestao.MULTIPLA_ESCOLHA : ModeloQuestao.VERDADEIRO_FALSO} 
                     selectedAnswer={userAnswers[q.id] || null} 
-                    onSelect={(ans) => !isCorrected && setUserAnswers(prev => ({...prev, [q.id]: ans}))} 
+                    onSelect={(ans) => handleAnswerSelect(q.id, ans)} 
                     isCorrected={isCorrected}
                     isPro={userPlan.isPro}
                     onUpgrade={() => handleViewChange('planos')}
