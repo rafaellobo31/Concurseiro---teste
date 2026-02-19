@@ -53,29 +53,33 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleAdminSecret);
     
     // Auth Supabase
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSupabaseUser(session?.user ?? null);
-      if (session?.user) {
-        // Tenta buscar o perfil local correspondente
-        const user = db.getUserByEmail(session.user.email!);
-        if (user) setCurrentUser(user);
-      }
-    });
+    let subscription: any = null;
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSupabaseUser(session?.user ?? null);
+        if (session?.user) {
+          // Tenta buscar o perfil local correspondente
+          const user = db.getUserByEmail(session.user.email!);
+          if (user) setCurrentUser(user);
+        }
+      });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSupabaseUser(session?.user ?? null);
-      if (session?.user) {
-        const user = db.getUserByEmail(session.user.email!);
-        if (user) setCurrentUser(user);
-      } else {
-        setCurrentUser(null);
-      }
-    });
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSupabaseUser(session?.user ?? null);
+        if (session?.user) {
+          const user = db.getUserByEmail(session.user.email!);
+          if (user) setCurrentUser(user);
+        } else {
+          setCurrentUser(null);
+        }
+      });
+      subscription = sub;
+    }
 
     setIsHydrated(true);
     return () => {
       window.removeEventListener('keydown', handleAdminSecret);
-      subscription.unsubscribe();
+      if (subscription) subscription.unsubscribe();
     };
   }, []);
 
@@ -106,7 +110,9 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     setCurrentUser(null);
     localStorage.removeItem(SESSION_KEY);
     handleViewChange('home');
@@ -132,9 +138,9 @@ const App: React.FC = () => {
       setProWallFeature(null);
       return;
     }
-    const expiry = Date.now() + (90 * 24 * 60 * 60 * 1000);
+    const expiry = Date.now() + (30 * 24 * 60 * 60 * 1000);
     db.updateUser(currentUser!.email, { isPro: true, proExpiry: expiry });
-    telemetry.logSubscription('Elite 90 Dias', 47.90);
+    telemetry.logSubscription('Elite 30 Dias', 19.99);
     setCurrentUser(db.getUserByEmail(currentUser!.email) || null);
     setProWallFeature(null);
     handleViewChange('perfil');

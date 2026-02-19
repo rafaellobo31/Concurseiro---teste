@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { supabase } from '../services/supabaseClient';
+import { supabase, supabaseInit } from '../services/supabaseClient';
 import { User } from '../types';
 
 interface AuthFormProps {
@@ -35,8 +35,14 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
     return /\S+@\S+\.\S+/.test(e);
   };
 
+  const isSupabaseConfigured = supabase && supabaseInit.ok;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured) {
+      setError('Autenticação desabilitada: Supabase não configurado.');
+      return;
+    }
     setError('');
     setIsLoading(true);
 
@@ -46,7 +52,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         setIsLoading(false);
         return;
       }
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+      const { error: resetError } = await supabase!.auth.resetPasswordForEmail(email);
       if (resetError) {
         setError(resetError.message);
       } else {
@@ -64,7 +70,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
     }
 
     if (isLogin) {
-      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+      const { data, error: loginError } = await supabase!.auth.signInWithPassword({
         email,
         password
       });
@@ -101,7 +107,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         return;
       }
       
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase!.auth.signUp({
         email,
         password,
         options: {
@@ -145,6 +151,13 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         {isForgot ? 'Enviaremos um link seguro' : isLogin ? 'Entre para ver seu histórico' : 'Junte-se à elite dos estudos'}
       </p>
 
+      {!isSupabaseConfigured && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700 text-[11px] font-bold leading-tight flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Configuração do Supabase ausente no ambiente atual. Autenticação desabilitada até configurar VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isForgot && !isLogin && (
           <div className="space-y-1">
@@ -182,7 +195,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
           </div>
         )}
 
-        <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-sm tracking-widest uppercase disabled:opacity-50">
+        <button type="submit" disabled={isLoading || !isSupabaseConfigured} className="w-full bg-indigo-600 text-white py-5 rounded-xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-sm tracking-widest uppercase disabled:opacity-50">
           {isLoading ? 'PROCESSANDO...' : isForgot ? 'ENVIAR LINK' : isLogin ? 'ENTRAR NA PLATAFORMA' : 'CRIAR CONTA AGORA'}
         </button>
       </form>

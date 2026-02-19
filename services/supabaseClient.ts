@@ -1,20 +1,38 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { createClient } from '@supabase/supabase-js';
+export type SupabaseInit = { ok: boolean; error?: string };
 
-// No Vite, variáveis de ambiente prefixadas com VITE_ devem ser acessadas via import.meta.env
-// Fix: Cast import.meta to any to resolve TS error when env property is not recognized
-const metaEnv = (import.meta as any).env;
-const supabaseUrl = metaEnv?.VITE_SUPABASE_URL;
-const supabaseAnonKey = metaEnv?.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "Supabase: VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não configuradas no ambiente Vite. " +
-    "A autenticação e persistência remota não funcionarão corretamente."
-  );
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0;
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder-url.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
-);
+function isHttpsUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+let supabase: SupabaseClient | null = null;
+let supabaseInit: SupabaseInit = { ok: true };
+
+if (!isNonEmptyString(rawUrl)) {
+  supabaseInit = { ok: false, error: '[Supabase] VITE_SUPABASE_URL ausente.' };
+} else if (!isHttpsUrl(rawUrl)) {
+  supabaseInit = { ok: false, error: '[Supabase] VITE_SUPABASE_URL inválida (exige https://).' };
+} else if (!isNonEmptyString(rawAnonKey)) {
+  supabaseInit = { ok: false, error: '[Supabase] VITE_SUPABASE_ANON_KEY ausente.' };
+} else {
+  supabase = createClient(rawUrl.trim(), rawAnonKey.trim(), {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
+}
+
+if (!supabaseInit.ok) console.error(supabaseInit.error);
+
+export { supabase, supabaseInit };

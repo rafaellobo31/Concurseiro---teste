@@ -32,6 +32,7 @@ export interface DbAlternativa {
  */
 export const dbService = {
   async createSimulado(userId: string, config: any) {
+    if (!supabase) throw new Error('Supabase não configurado');
     const { data, error } = await supabase
       .from('simulados')
       .insert({
@@ -51,6 +52,7 @@ export const dbService = {
   },
 
   async insertQuestoesEAlternativas(simuladoId: string, questions: Question[]) {
+    if (!supabase) return [];
     const results = [];
 
     for (const q of questions) {
@@ -95,6 +97,7 @@ export const dbService = {
   },
 
   async saveResposta(userId: string, questaoId: string, alternativaId: string) {
+    if (!supabase) return;
     const { error } = await supabase
       .from('respostas_usuario')
       .upsert({
@@ -107,6 +110,7 @@ export const dbService = {
   },
 
   async saveResultado(userId: string, simuladoId: string, total: number, acertos: number) {
+    if (!supabase) return;
     const { error } = await supabase
       .from('resultados')
       .insert({

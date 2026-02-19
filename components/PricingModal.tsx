@@ -46,7 +46,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
             <h2 className="text-2xl font-black mb-2 tracking-tight">C-PRO ELITE</h2>
-            <p className="text-slate-400 text-sm font-medium mb-8">Acesso total por 90 dias.</p>
+            <p className="text-slate-400 text-sm font-medium mb-8">Acesso total por 30 dias.</p>
             
             <div className="space-y-4 mb-12">
               <div className="flex items-center gap-3 text-xs font-bold text-slate-300">
@@ -69,7 +69,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
               <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total a pagar</span>
               <span className="text-indigo-400 text-xs font-black uppercase">Pagamento Único</span>
             </div>
-            <div className="text-3xl font-black tracking-tighter">R$ 47,90</div>
+            <div className="text-3xl font-black tracking-tighter">R$ 19,99</div>
           </div>
           
           <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
@@ -195,7 +195,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
               <h3 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight">Pagamento via Pix</h3>
               <div className="bg-slate-50 p-6 rounded-3xl border border-gray-100 mb-6 inline-block mx-auto">
                 <img 
-                  src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=CPRO-MOCK-PIX-PAYMENT-4790" 
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=CPRO-MOCK-PIX-PAYMENT-1999" 
                   alt="QR Code Pix"
                   className="w-40 h-40 grayscale opacity-80"
                 />
