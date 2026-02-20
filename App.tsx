@@ -14,6 +14,7 @@ import HistoryView from './components/HistoryView';
 import UserProfile from './components/UserProfile';
 import AdminDashboard from './components/AdminDashboard';
 import UserAnalysisView from './components/UserAnalysisView'; 
+import SubscriptionReturn from './components/SubscriptionReturn';
 import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from './types';
 import { generateExamQuestions, generateSubjectQuestions } from './services/geminiService';
 import { normalizeAnswer, resolveToCanonical } from './utils';
@@ -74,6 +75,11 @@ const App: React.FC = () => {
         }
       });
       subscription = sub;
+    }
+
+    // Detectar rota de retorno de assinatura
+    if (window.location.pathname === '/assinatura/retorno') {
+      setView('assinatura_retorno');
     }
 
     setIsHydrated(true);
@@ -351,6 +357,7 @@ const App: React.FC = () => {
     if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!supabaseUser} />;
     if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={handleGenerateFromThermometer} onShowProWall={setProWallFeature} />;
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); handleGenerateOrg(Modalidade.NACIONAL, name, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
+    if (view === 'assinatura_retorno') return <SubscriptionReturn onBack={() => handleViewChange('home')} />;
 
     return (
       <div className="space-y-12 py-8">

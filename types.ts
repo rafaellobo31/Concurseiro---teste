@@ -152,7 +152,7 @@ export interface PredictedConcursosResponse {
   sources?: GroundingSource[];
 }
 
-export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis';
+export type AppView = 'home' | 'simulado' | 'material' | 'materias' | 'planos' | 'previstos' | 'perfil' | 'historico' | 'favoritos' | 'auth' | 'termometro' | 'user_analysis' | 'assinatura_retorno';
 
 export interface UserPlan {
   isPro: boolean;

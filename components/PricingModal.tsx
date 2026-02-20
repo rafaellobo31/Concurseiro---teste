@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { supabase, supabaseInit } from '../services/supabaseClient';
 
 interface PricingModalProps {
   onUpgrade: () => void;
@@ -14,6 +15,47 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [name, setName] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscribeError, setSubscribeError] = useState('');
+
+  const handleSubscribe = async () => {
+    if (!supabase || !supabaseInit.ok) return;
+    
+    setIsSubscribing(true);
+    setSubscribeError('');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setSubscribeError('Você precisa estar logado para assinar.');
+        setIsSubscribing(false);
+        return;
+      }
+
+      const response = await fetch('/api/mp/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao iniciar assinatura');
+      }
+
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      } else {
+        throw new Error('URL de checkout não recebida');
+      }
+    } catch (err: any) {
+      console.error("Erro na assinatura:", err);
+      setSubscribeError(err.message || 'Erro ao processar assinatura');
+      setIsSubscribing(false);
+    }
+  };
 
   // Formatação automática do cartão
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +124,45 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
             <div className="animate-in fade-in slide-in-from-right-4 duration-500">
               <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">Escolha como pagar</h3>
               <div className="space-y-3 mb-8">
+                <button 
+                  onClick={handleSubscribe}
+                  disabled={isSubscribing || !supabase || !supabaseInit.ok}
+                  className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-indigo-600 bg-indigo-50/30 hover:bg-indigo-50 transition-all group relative overflow-hidden"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-indigo-600 rounded-xl text-white transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black text-slate-900">Assinar PRO Mensal</p>
+                      <p className="text-[10px] font-bold text-indigo-600">R$ 19,99 / mês via Mercado Pago</p>
+                    </div>
+                  </div>
+                  {isSubscribing ? (
+                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-indigo-600"><path d="m9 18 6-6-6-6"/></svg>
+                  )}
+                </button>
+
+                {(!supabase || !supabaseInit.ok) && (
+                  <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest text-center mt-2">
+                    Requer login (Supabase) para assinar
+                  </p>
+                )}
+                
+                {subscribeError && (
+                   <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest text-center mt-2">
+                    {subscribeError}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-4 my-6">
+                  <div className="h-px bg-gray-100 flex-1"></div>
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Outras Opções (Simuladas)</span>
+                  <div className="h-px bg-gray-100 flex-1"></div>
+                </div>
+
                 <button 
                   onClick={() => setStep('card')}
                   className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all group"
