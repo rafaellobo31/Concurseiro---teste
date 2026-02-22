@@ -147,7 +147,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
 
                 {(!supabase || !supabaseInit.ok) && (
                   <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest text-center mt-2">
-                    Requer login (Supabase) para assinar
+                    Requer login para assinar
                   </p>
                 )}
                 
@@ -156,44 +156,6 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
                     {subscribeError}
                   </p>
                 )}
-
-                <div className="flex items-center gap-4 my-6">
-                  <div className="h-px bg-gray-100 flex-1"></div>
-                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Outras Opções (Simuladas)</span>
-                  <div className="h-px bg-gray-100 flex-1"></div>
-                </div>
-
-                <button 
-                  onClick={() => setStep('card')}
-                  className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-slate-900">Cartão de Crédito</p>
-                      <p className="text-[10px] font-bold text-slate-400">Até 12x via Mercado Pago</p>
-                    </div>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-300"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
-
-                <button 
-                  onClick={() => setStep('pix')}
-                  className="w-full flex items-center justify-between p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 12l-8 8-8-8 8-8z"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-slate-900">Pix Instantâneo</p>
-                      <p className="text-[10px] font-bold text-slate-400">Liberação imediata</p>
-                    </div>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-300"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
               </div>
               {onClose && (
                 <button onClick={onClose} className="w-full text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 transition-colors">
