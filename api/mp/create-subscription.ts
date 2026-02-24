@@ -68,7 +68,7 @@ export default async function handler(req: Request) {
   }
 
   try {
-    const amount = Number(process.env.MP_PLAN_PRICE ?? 19.99);
+    const amount = Number(process.env.MP_PLAN_PRICE ?? 0.10);
     const currency = process.env.MP_CURRENCY ?? "BRL";
     const appUrl = process.env.APP_URL;
 

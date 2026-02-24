@@ -111,7 +111,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
               <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total a pagar</span>
               <span className="text-indigo-400 text-xs font-black uppercase">Pagamento Único</span>
             </div>
-            <div className="text-3xl font-black tracking-tighter">R$ 19,99</div>
+            <div className="text-3xl font-black tracking-tighter">R$ 0,10</div>
           </div>
           
           <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
@@ -135,7 +135,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ onUpgrade, onClose }) => {
                     </div>
                     <div className="text-left">
                       <p className="text-sm font-black text-slate-900">Assinar PRO Mensal</p>
-                      <p className="text-[10px] font-bold text-indigo-600">R$ 19,99 / mês via Mercado Pago</p>
+                      <p className="text-[10px] font-bold text-indigo-600">R$ 0,10 / mês via Mercado Pago</p>
                     </div>
                   </div>
                   {isSubscribing ? (
