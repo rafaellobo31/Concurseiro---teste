@@ -88,7 +88,6 @@ export default async function handler(req: Request) {
       body: JSON.stringify({
         reason: "Concurseiro PRO – Assinatura Mensal",
         external_reference: user.id,
-        payer_email: user.email,
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
