@@ -94,26 +94,42 @@ const App: React.FC = () => {
     refreshUser();
   };
 
-  const onGenerateOrg = async (...args: any[]) => {
-    // @ts-ignore
-    const success = await handleGenerateOrg(...args);
+  const onGenerateOrg = async (
+    modalidade: Modalidade, 
+    concurso: string, 
+    nivel: Nivel | string, 
+    cargoArea: string, 
+    modelo: ModeloQuestao, 
+    numQuestao: number, 
+    banca: string, 
+    estado?: string, 
+    isFavOnly?: boolean
+  ) => {
+    const success = await handleGenerateOrg(modalidade, concurso, nivel, cargoArea, modelo, numQuestao, banca, estado, isFavOnly);
     if (success) {
       setView('simulado');
       setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
     }
   };
 
-  const onGenerateSubject = async (...args: any[]) => {
-    // @ts-ignore
-    const success = await handleGenerateSubject(...args);
+  const onGenerateSubject = async (
+    materia: string, 
+    modelo: ModeloQuestao, 
+    numQuestao: number, 
+    banca: string
+  ) => {
+    const success = await handleGenerateSubject(materia, modelo, numQuestao, banca);
     if (success) {
       setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
     }
   };
 
-  const onGenerateFromThermometer = async (...args: any[]) => {
-    // @ts-ignore
-    const success = await handleGenerateFromThermometer(...args);
+  const onGenerateFromThermometer = async (
+    concurso: string, 
+    subjects: string[], 
+    banca: string
+  ) => {
+    const success = await handleGenerateFromThermometer(concurso, subjects, banca);
     if (success) {
       setTimeout(() => examRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
     }

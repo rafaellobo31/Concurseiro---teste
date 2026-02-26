@@ -39,7 +39,7 @@ export const useExam = (currentUser: User | null, supabaseUser: any, onShowProWa
         if (currentUser.favorites.length < 10) {
             alert("Você precisa de no mínimo 10 questões favoritadas para realizar um simulado de revisão.");
             setIsLoading(false);
-            return;
+            return false;
         }
         setExam({ title: "Simulado de Favoritos", questions: currentUser.favorites });
         setIsLoading(false);

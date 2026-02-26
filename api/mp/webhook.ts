@@ -82,19 +82,12 @@ export default async function handler(req: Request) {
   const payerEmail = (mpData as any).payer_email || (mpData as any)?.payer?.email || null;
   const externalRef = (mpData as any).external_reference;
 
-  const amount =
-    (mpData as any)?.auto_recurring?.transaction_amount ??
-    (mpData as any)?.auto_recurring?.transaction_amount ??
-    19.99;
-
-  const currency =
-    (mpData as any)?.auto_recurring?.currency_id ??
-    (mpData as any)?.auto_recurring?.currency_id ??
-    'BRL';
+  const amount = (mpData as any)?.auto_recurring?.transaction_amount ?? 19.99;
+  const currency = (mpData as any)?.auto_recurring?.currency_id ?? 'BRL';
 
   // external_reference precisa ser o UUID do usuário (user.id)
   if (!externalRef || typeof externalRef !== 'string') {
-    console.error('[MP Webhook] external_reference ausente:', mpData);
+    console.error('[MP Webhook] external_reference ausente para preapproval:', preapprovalId);
     return json({ ok: true, ignored: 'missing_external_reference' }, 200);
   }
 
@@ -111,8 +104,8 @@ export default async function handler(req: Request) {
       p_plan_status: plan_status,
       p_mp_preapproval_id: preapprovalId || String(dataId),
       p_payer_email: payerEmail,
-      p_amount: Number(amount ?? 19.99),
-      p_currency_id: String(currency ?? 'BRL'),
+      p_amount: Number(amount),
+      p_currency_id: String(currency),
       p_status: String(status ?? ''),
       p_external_reference: externalRef,
       p_event_type: String(type ?? 'preapproval'),
@@ -120,14 +113,15 @@ export default async function handler(req: Request) {
     });
 
     if (rpcError) {
-      console.error('[MP Webhook] RPC erro:', rpcError);
+      console.error('[MP Webhook] RPC erro ao atualizar plano:', rpcError.message);
       // ACK para evitar retry infinito, mas loga
       return json({ ok: true, ignored: 'rpc_failed' }, 200);
     }
 
+    console.log(`[MP Webhook] Plano atualizado: user=${externalRef}, status=${status}, plan=${plan}`);
     return json({ ok: true }, 200);
   } catch (e: any) {
-    console.error('[MP Webhook] Erro inesperado:', e);
+    console.error('[MP Webhook] Erro inesperado no processamento:', e.message || e);
     return json({ ok: true, ignored: 'unexpected_error' }, 200);
   }
 }
