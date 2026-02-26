@@ -53,47 +53,65 @@ export const dbService = {
 
   async insertQuestoesEAlternativas(simuladoId: string, questions: Question[]) {
     if (!supabase) return [];
-    const results = [];
+    
+    // 1. Inserir todas as questões em lote
+    const questoesToInsert = questions.map(q => ({
+      simulado_id: simuladoId,
+      texto: q.text
+    }));
 
-    for (const q of questions) {
-      // Inserir Questão
-      const { data: questaoData, error: questaoError } = await supabase
-        .from('questoes')
-        .insert({
-          simulado_id: simuladoId,
-          texto: q.text
-        })
-        .select()
-        .single();
+    const { data: insertedQuestoes, error: questaoError } = await supabase
+      .from('questoes')
+      .insert(questoesToInsert)
+      .select();
 
-      if (questaoError) throw questaoError;
+    if (questaoError) throw questaoError;
+    if (!insertedQuestoes) return [];
 
-      // Inserir Alternativas
-      const alternativasToInsert = (q.options || []).map((opt, index) => {
-        const letra = String.fromCharCode(65 + index);
-        return {
-          questao_id: questaoData.id,
+    // 2. Preparar todas as alternativas para inserção em lote
+    const alternativasToInsert: any[] = [];
+    const mapping: any[] = [];
+
+    insertedQuestoes.forEach((questaoDb, index) => {
+      const originalQuestion = questions[index];
+      const opts = originalQuestion.options || [];
+      
+      opts.forEach((opt, optIndex) => {
+        const letra = String.fromCharCode(65 + optIndex);
+        alternativasToInsert.push({
+          questao_id: questaoDb.id,
           letra: letra,
           texto: opt,
-          correta: letra === q.correctAnswer || opt === q.correctAnswer
-        };
+          correta: letra === originalQuestion.correctAnswer || opt === originalQuestion.correctAnswer
+        });
       });
 
-      const { data: altData, error: altError } = await supabase
-        .from('alternativas')
-        .insert(alternativasToInsert)
-        .select();
+      mapping.push({
+        questao: questaoDb,
+        originalId: originalQuestion.id,
+        alternativas: [] // Será preenchido depois
+      });
+    });
 
-      if (altError) throw altError;
+    // 3. Inserir todas as alternativas em lote
+    const { data: insertedAlts, error: altError } = await supabase
+      .from('alternativas')
+      .insert(alternativasToInsert)
+      .select();
 
-      results.push({
-        questao: questaoData,
-        alternativas: altData,
-        originalId: q.id // Mapeamento para o estado do React
+    if (altError) throw altError;
+
+    // 4. Reconstruir o mapeamento com as alternativas inseridas
+    if (insertedAlts) {
+      insertedAlts.forEach(alt => {
+        const mapItem = mapping.find(m => m.questao.id === alt.questao_id);
+        if (mapItem) {
+          mapItem.alternativas.push(alt);
+        }
       });
     }
 
-    return results;
+    return mapping;
   },
 
   async saveResposta(userId: string, questaoId: string, alternativaId: string) {

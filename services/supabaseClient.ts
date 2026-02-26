@@ -15,8 +15,9 @@ function isHttpsUrl(v: string): boolean {
   }
 }
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL;
-const rawAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const metaEnv = (import.meta as any).env;
+const rawUrl = metaEnv.VITE_SUPABASE_URL;
+const rawAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY;
 
 let supabase: SupabaseClient | null = null;
 let supabaseInit: SupabaseInit = { ok: true };

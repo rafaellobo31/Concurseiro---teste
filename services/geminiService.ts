@@ -1,6 +1,7 @@
 
 import { Modalidade, ModeloQuestao, Question, StudyPlan, GroundingSource, ThermometerData, PredictedConcursosResponse, BoardDNAItem, Nivel } from "../types";
 import { telemetry } from "./telemetry";
+import { handleError } from "../utils/errorUtils";
 
 interface GeneratedAIResponse {
   text: string;
@@ -22,7 +23,6 @@ async function callGeminiProxy(payload: { model: string, contents: any, config?:
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     const msg = errorData.error || `Erro de Rede: ${response.status}`;
-    console.error(`[GeminiProxy] Falha: ${msg}`);
     throw new Error(msg);
   }
 
@@ -145,6 +145,7 @@ export async function fetchThermometerData(concurso: string, banca?: string): Pr
     if (parsed) parsed.sources = res.sources;
     return parsed;
   } catch (error) {
+    handleError(error, "fetchThermometerData");
     return null;
   }
 }
@@ -192,6 +193,7 @@ export async function generateExamQuestions(
       diagnostic: parsed?.diagnostic
     };
   } catch (error) {
+    handleError(error, "generateExamQuestions");
     return { questions: [] };
   }
 }
@@ -214,6 +216,7 @@ export async function generateSubjectQuestions(
       diagnostic: parsed?.diagnostic
     };
   } catch (error) {
+    handleError(error, "generateSubjectQuestions");
     return { questions: [] };
   }
 }
@@ -231,6 +234,7 @@ export async function generateStudyPlan(
     if (plan) plan.sources = res.sources;
     return plan || { title: "Erro", summary: "", phases: [], criticalTopics: [], weeklyRoutine: [] };
   } catch (error) {
+    handleError(error, "generateStudyPlan");
     throw error;
   }
 }

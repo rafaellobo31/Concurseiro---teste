@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { supabase, supabaseInit } from '../services/supabaseClient';
 import { User } from '../types';
+import { hashPassword } from '../utils';
 
 interface AuthFormProps {
   onLogin: (user: User) => void;
@@ -82,9 +83,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         // Tenta buscar/criar o perfil local para compatibilidade
         let localUser = db.getUserByEmail(email);
         if (!localUser) {
+          const hashed = await hashPassword(password);
           db.register({
             email,
-            passwordHash: password,
+            passwordHash: hashed,
             nickname: email.split('@')[0],
             isPro: false,
             favorites: [],
@@ -119,9 +121,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         console.error("SIGNUP_ERROR", signUpError);
         setError(`${signUpError.message}${signUpError.status ? ` (Status: ${signUpError.status})` : ''}`);
       } else if (data.user) {
+        const hashed = await hashPassword(password);
         const success = db.register({
           email,
-          passwordHash: password,
+          passwordHash: hashed,
           nickname,
           isPro: false,
           favorites: [],

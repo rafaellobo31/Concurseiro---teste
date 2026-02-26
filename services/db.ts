@@ -153,9 +153,15 @@ class Database {
   /**
    * Validação de Credenciais.
    */
-  public validateCredentials(email: string, pass: string): User | null {
+  public async validateCredentials(email: string, pass: string): Promise<User | null> {
     const user = this.getUserByEmail(email);
-    if (user && user.passwordHash === pass) {
+    if (!user) return null;
+    
+    // Import dinâmico para evitar dependência circular se houver
+    const { hashPassword } = await import('../utils');
+    const hashed = await hashPassword(pass);
+    
+    if (user.passwordHash === hashed || user.passwordHash === pass) { // Mantém compatibilidade com senhas antigas não hashadas
       return user;
     }
     return null;
