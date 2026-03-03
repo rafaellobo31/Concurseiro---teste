@@ -4,6 +4,7 @@ import { User, UserPlan, Question, StudyPlan, ModeloQuestao } from '../types';
 import HistoryView from './HistoryView';
 import QuestionItem from './QuestionItem';
 import { db } from '../services/db';
+import { supabase } from '../services/supabaseClient';
 
 interface UserProfileProps {
   user: User;
@@ -160,7 +161,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
             {activeTab === 'assinatura' && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <header className="mb-10">
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Plano Atual</h3>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Minha Assinatura</h3>
                   <p className="text-slate-400 font-medium">Gestão de acessos e benefícios.</p>
                 </header>
                 <div className="bg-indigo-600 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
@@ -170,9 +171,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
                          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                       </div>
                       <div className="flex-1 text-center md:text-left">
-                        <span className="bg-white/20 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full mb-4 inline-block">
-                          Plano {userPlan.tier}
-                        </span>
+                        <div className="flex flex-wrap gap-2 mb-4 justify-center md:justify-start">
+                          <span className="bg-white/20 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full inline-block">
+                            Plano {userPlan.tier}
+                          </span>
+                          {userPlan.isPro && (
+                            <>
+                              <span className="bg-white/20 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full inline-block">
+                                {userPlan.plan_source === 'card' ? 'Cartão' : 'PIX'}
+                              </span>
+                              <span className={`bg-white/20 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full inline-block ${userPlan.plan_status === 'active' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                {userPlan.plan_status === 'active' ? 'Ativo' : userPlan.plan_status === 'canceled' ? 'Cancelado' : userPlan.plan_status}
+                              </span>
+                            </>
+                          )}
+                        </div>
                         <h4 className="text-3xl font-black mb-2">Acesso {userPlan.isPro ? 'Ilimitado' : 'Limitado'}</h4>
                         <p className="text-indigo-100 font-medium text-lg leading-relaxed">
                           {userPlan.isPro 
@@ -182,15 +195,54 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, userPlan, onUpdate, onU
                       </div>
                       {!userPlan.isPro && (
                         <button onClick={onUpgrade} className="bg-white text-indigo-600 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-slate-50 active:scale-95 transition-all">
-                          DAR UN UPGRADE
+                          DAR UM UPGRADE
                         </button>
                       )}
                     </div>
-                    {userPlan.proExpiry && (
-                      <div className="mt-8 pt-6 border-t border-white/10 text-right">
+                    
+                    {userPlan.isPro && (
+                      <div className="mt-8 pt-6 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
                         <p className="text-[10px] text-indigo-200 font-black uppercase tracking-widest">
-                          Sua assinatura expira em: {new Date(userPlan.proExpiry).toLocaleDateString('pt-BR')}
+                          {userPlan.plan_source === 'pix' 
+                            ? `Válido até: ${userPlan.plan_expires_at ? new Date(userPlan.plan_expires_at).toLocaleDateString('pt-BR') : '---'}`
+                            : userPlan.proExpiry ? `Próxima cobrança: ${new Date(userPlan.proExpiry).toLocaleDateString('pt-BR')}` : ''}
                         </p>
+                        
+                        {userPlan.plan_source === 'card' && userPlan.plan_status === 'active' && (
+                          <button 
+                            onClick={async () => {
+                              if (!confirm('Deseja cancelar a renovação automática? Seu acesso PRO continuará ativo até o fim do período atual.')) return;
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                if (!session) return;
+                                const res = await fetch('/api/mp/cancel-subscription', {
+                                  method: 'POST',
+                                  headers: { 'Authorization': `Bearer ${session.access_token}` }
+                                });
+                                if (res.ok) {
+                                  showMsg('Renovação automática cancelada com sucesso!');
+                                  // Forçar refresh do usuário seria ideal aqui, mas como estamos no SPA, o refreshUser do useAuth deve ser chamado
+                                  // Por simplicidade, avisamos o usuário
+                                  setTimeout(() => window.location.reload(), 2000);
+                                } else {
+                                  const d = await res.json();
+                                  showMsg(d.error || 'Erro ao cancelar', 'error');
+                                }
+                              } catch (e) {
+                                showMsg('Erro de conexão', 'error');
+                              }
+                            }}
+                            className="text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-colors underline underline-offset-4"
+                          >
+                            Cancelar renovação automática
+                          </button>
+                        )}
+                        
+                        {userPlan.plan_status === 'canceled' && (
+                          <p className="text-[10px] text-amber-300 font-black uppercase tracking-widest italic">
+                            Renovação cancelada. Seu PRO permanece ativo até o fim do período.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

@@ -54,47 +54,72 @@ export default async function handler(req: Request) {
   const dataId = payload?.data?.id || payload?.id || null;
 
   if (!dataId) {
-    // nada para processar, mas ACK
     return json({ ok: true, ignored: 'missing_data_id' }, 200);
   }
 
-  // Consultar a assinatura real no MP (fonte da verdade)
-  const mpUrl = `https://api.mercadopago.com/preapproval/${encodeURIComponent(String(dataId))}`;
+  let mpData: any = null;
+  let plan: 'pro' | 'free' = 'free';
+  let plan_status: 'active' | 'past_due' | 'canceled' | 'inactive' = 'inactive';
+  let plan_source: 'card' | 'pix' = 'card';
+  let preapprovalId: string | null = null;
+  let lastPaymentId: string | null = null;
+  let externalRef: string | null = null;
+  let payerEmail: string | null = null;
+  let amount: number = 19.99;
+  let currency: string = 'BRL';
+  let status: string = '';
 
-  const mpRes = await fetch(mpUrl, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessTokenMP}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  // Se for pagamento (PIX ou cartão avulso)
+  if (type === 'payment' || payload?.resource?.includes('payments')) {
+    const mpUrl = `https://api.mercadopago.com/v1/payments/${encodeURIComponent(String(dataId))}`;
+    const mpRes = await fetch(mpUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessTokenMP}` },
+    });
+    mpData = await safeReadJson(mpRes);
+    if (!mpRes.ok) return json({ ok: true, ignored: 'mp_payment_fetch_failed' }, 200);
 
-  const mpData = await safeReadJson(mpRes);
+    status = mpData.status;
+    externalRef = mpData.external_reference;
+    payerEmail = mpData.payer?.email;
+    amount = mpData.transaction_amount;
+    currency = mpData.currency_id;
+    lastPaymentId = String(mpData.id);
+    plan_source = 'pix'; // Assumimos PIX para pagamentos diretos neste contexto
 
-  if (!mpRes.ok) {
-    console.error('[MP Webhook] Falha ao buscar preapproval:', mpRes.status, mpData);
-    // ACK mesmo assim para evitar avalanche, mas registra erro
-    return json({ ok: true, ignored: 'mp_fetch_failed', status: mpRes.status }, 200);
+    if (status === 'approved') {
+      plan = 'pro';
+      plan_status = 'active';
+    }
+  } 
+  // Se for assinatura (preapproval)
+  else {
+    const mpUrl = `https://api.mercadopago.com/preapproval/${encodeURIComponent(String(dataId))}`;
+    const mpRes = await fetch(mpUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessTokenMP}` },
+    });
+    mpData = await safeReadJson(mpRes);
+    if (!mpRes.ok) return json({ ok: true, ignored: 'mp_preapproval_fetch_failed' }, 200);
+
+    status = mpData.status;
+    externalRef = mpData.external_reference;
+    payerEmail = mpData.payer_email || mpData?.payer?.email;
+    amount = mpData?.auto_recurring?.transaction_amount ?? 19.99;
+    currency = mpData?.auto_recurring?.currency_id ?? 'BRL';
+    preapprovalId = String(mpData.id);
+    plan_source = 'card';
+
+    const mapped = mapStatusToPlan(String(status || ''));
+    plan = mapped.plan;
+    plan_status = mapped.plan_status;
   }
 
-  const preapprovalId = (mpData as any).id;
-  const status = (mpData as any).status;
-  const payerEmail = (mpData as any).payer_email || (mpData as any)?.payer?.email || null;
-  const externalRef = (mpData as any).external_reference;
-
-  const amount = (mpData as any)?.auto_recurring?.transaction_amount ?? 19.99;
-  const currency = (mpData as any)?.auto_recurring?.currency_id ?? 'BRL';
-
-  // external_reference precisa ser o UUID do usuário (user.id)
   if (!externalRef || typeof externalRef !== 'string') {
-    console.error('[MP Webhook] external_reference ausente para preapproval:', preapprovalId);
+    console.error('[MP Webhook] external_reference ausente:', dataId);
     return json({ ok: true, ignored: 'missing_external_reference' }, 200);
   }
 
-  const { plan, plan_status } = mapStatusToPlan(String(status || ''));
-
-  // IMPORTANTÍSSIMO: Só atualiza plano quando status é um dos conhecidos.
-  // Para pending/unknown: mantém free/inactive (mas ainda registra evento).
   try {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -102,13 +127,15 @@ export default async function handler(req: Request) {
       p_user_id: externalRef,
       p_plan: plan,
       p_plan_status: plan_status,
-      p_mp_preapproval_id: preapprovalId || String(dataId),
+      p_plan_source: plan_source,
+      p_mp_preapproval_id: preapprovalId,
+      p_mp_last_payment_id: lastPaymentId,
       p_payer_email: payerEmail,
       p_amount: Number(amount),
       p_currency_id: String(currency),
       p_status: String(status ?? ''),
       p_external_reference: externalRef,
-      p_event_type: String(type ?? 'preapproval'),
+      p_event_type: String(type ?? 'webhook'),
       p_event_id: String(dataId),
     });
 

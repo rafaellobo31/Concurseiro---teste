@@ -140,7 +140,10 @@ const App: React.FC = () => {
   const userPlan: UserPlan = {
     isPro: currentUser?.isPro || false,
     tier: currentUser?.isPro ? 'Pro' : 'Free',
-    proExpiry: currentUser?.proExpiry
+    proExpiry: currentUser?.proExpiry,
+    plan_status: currentUser?.plan_status,
+    plan_source: currentUser?.plan_source,
+    plan_expires_at: currentUser?.plan_expires_at
   };
 
   const currentScore = exam ? exam.questions.filter(q => normalizeAnswer(userAnswers[q.id]) === resolveToCanonical(q.correctAnswer, q.options)).length : 0;

@@ -26,8 +26,7 @@ export const useAuth = () => {
       const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSupabaseUser(session?.user ?? null);
         if (session?.user) {
-          const user = db.getUserByEmail(session.user.email!);
-          if (user) setCurrentUser(user);
+          refreshUser(session.user.email!);
         } else {
           setCurrentUser(null);
         }
@@ -56,20 +55,53 @@ export const useAuth = () => {
   const handleUpdateUser = (updates: Partial<User>) => {
     if (currentUser) {
       db.updateUser(currentUser.email, updates);
-      setCurrentUser(db.getUserByEmail(currentUser.email) || null);
+      refreshUser(currentUser.email);
     }
   };
 
   const handleSaveStudyPlan = (plan: any) => {
     if (currentUser) {
       db.saveStudyPlan(currentUser.email, plan);
-      setCurrentUser(db.getUserByEmail(currentUser.email) || null);
+      refreshUser(currentUser.email);
     }
   };
 
-  const refreshUser = () => {
-    if (currentUser) {
-      setCurrentUser(db.getUserByEmail(currentUser.email) || null);
+  const refreshUser = async (email?: string) => {
+    const targetEmail = email || currentUser?.email;
+    if (targetEmail) {
+      // Sincroniza com Supabase (Fonte da verdade para planos)
+      if (supabase) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', targetEmail)
+          .single();
+
+        if (profile) {
+          db.updateUser(targetEmail, {
+            isPro: profile.plan === 'pro',
+            plan_status: profile.plan_status,
+            plan_source: profile.plan_source,
+            plan_expires_at: profile.plan_expires_at,
+            mp_preapproval_id: profile.mp_preapproval_id,
+            mp_last_payment_id: profile.mp_last_payment_id
+          });
+        }
+      }
+
+      const user = db.getUserByEmail(targetEmail);
+      if (user) {
+        // Gating PIX expirado
+        if (user.plan_source === 'pix' && user.plan_expires_at) {
+          const expiry = new Date(user.plan_expires_at).getTime();
+          if (expiry < Date.now()) {
+            user.isPro = false;
+            user.plan_status = 'inactive';
+            db.updateUser(user.email, { isPro: false, plan_status: 'inactive' });
+          }
+        }
+        setCurrentUser(user);
+      }
     }
   };
 

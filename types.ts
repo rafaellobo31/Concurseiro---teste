@@ -99,6 +99,11 @@ export interface User {
   favorites: Question[];
   history: ExamResult[];
   savedPlans: StudyPlan[];
+  plan_status?: 'active' | 'past_due' | 'canceled' | 'inactive';
+  plan_source?: 'free' | 'card' | 'pix';
+  plan_expires_at?: string | null;
+  mp_preapproval_id?: string | null;
+  mp_last_payment_id?: string | null;
 }
 
 // Added banca and estado to Exam interface to match component usage
@@ -158,6 +163,9 @@ export interface UserPlan {
   isPro: boolean;
   tier: 'Free' | 'Pro' | 'Elite';
   proExpiry?: number;
+  plan_status?: 'active' | 'past_due' | 'canceled' | 'inactive';
+  plan_source?: 'free' | 'card' | 'pix';
+  plan_expires_at?: string | null;
 }
 
 export type ViewMode = 'desktop' | 'mobile';
