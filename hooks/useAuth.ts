@@ -16,25 +16,40 @@ export const useAuth = () => {
     // Auth Supabase
     let subscription: any = null;
     if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      if ((import.meta as any).env.DEV) {
+        console.log("[Auth] Iniciando verificação de sessão...");
+      }
+
+      const initSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if ((import.meta as any).env.DEV) {
+          console.log("[Auth] Resultado getSession:", session ? "Sessão Ativa" : "Sem Sessão");
+        }
         setSupabaseUser(session?.user ?? null);
         if (session?.user) {
-          refreshUser(session.user.id);
+          await refreshUser(session.user.id);
         }
-      });
+        setIsHydrated(true);
+      };
 
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+      initSession();
+
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if ((import.meta as any).env.DEV) {
+          console.log("[Auth] Evento onAuthStateChange:", event);
+        }
         setSupabaseUser(session?.user ?? null);
-        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          refreshUser(session.user.id);
+        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+          await refreshUser(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
         }
       });
       subscription = sub;
+    } else {
+      setIsHydrated(true);
     }
 
-    setIsHydrated(true);
     return () => {
       if (subscription) subscription.unsubscribe();
     };
@@ -75,28 +90,45 @@ export const useAuth = () => {
         const profile = await dbService.loadUserProfile(targetId);
 
         if (profile) {
-          // Atualiza o banco local com os dados do Supabase
-          db.updateUser(profile.email, {
-            isPro: profile.plan === 'pro',
-            plan_status: profile.plan_status,
-            plan_source: profile.plan_source,
-            plan_expires_at: profile.plan_expires_at,
-            mp_preapproval_id: profile.mp_preapproval_id,
-            mp_last_payment_id: profile.mp_last_payment_id
-          });
+          let user = db.getUserByEmail(profile.email);
+          if (!user) {
+            // Se o usuário existe no Supabase mas não no banco local, registra localmente
+            db.register({
+              email: profile.email,
+              passwordHash: 'supabase_auth',
+              nickname: profile.nickname || profile.email.split('@')[0],
+              isPro: profile.plan === 'pro',
+              favorites: [],
+              history: [],
+              savedPlans: []
+            });
+            user = db.getUserByEmail(profile.email);
+          }
 
-          const user = db.getUserByEmail(profile.email);
           if (user) {
-            // Gating PIX expirado (mantendo lógica existente se necessário, mas profile deve ser soberano)
-            if (user.plan_source === 'pix' && user.plan_expires_at) {
-              const expiry = new Date(user.plan_expires_at).getTime();
-              if (expiry < Date.now()) {
-                user.isPro = false;
-                user.plan_status = 'inactive';
-                db.updateUser(user.email, { isPro: false, plan_status: 'inactive' });
+            // Atualiza o banco local com os dados do Supabase
+            db.updateUser(profile.email, {
+              isPro: profile.plan === 'pro',
+              plan_status: profile.plan_status,
+              plan_source: profile.plan_source,
+              plan_expires_at: profile.plan_expires_at,
+              mp_preapproval_id: profile.mp_preapproval_id,
+              mp_last_payment_id: profile.mp_last_payment_id
+            });
+
+            const updatedUser = db.getUserByEmail(profile.email);
+            if (updatedUser) {
+              // Gating PIX expirado
+              if (updatedUser.plan_source === 'pix' && updatedUser.plan_expires_at) {
+                const expiry = new Date(updatedUser.plan_expires_at).getTime();
+                if (expiry < Date.now()) {
+                  updatedUser.isPro = false;
+                  updatedUser.plan_status = 'inactive';
+                  db.updateUser(updatedUser.email, { isPro: false, plan_status: 'inactive' });
+                }
               }
+              setCurrentUser(updatedUser);
             }
-            setCurrentUser(user);
           }
         }
       } catch (error) {

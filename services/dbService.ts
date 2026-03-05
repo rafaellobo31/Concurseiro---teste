@@ -146,7 +146,7 @@ export const dbService = {
     if (!supabase) throw new Error('Supabase não configurado');
     const { data, error } = await supabase
       .from('profiles')
-      .select('plan, plan_status, plan_source, plan_expires_at, role, email, mp_preapproval_id, mp_last_payment_id')
+      .select('plan, plan_status, plan_source, plan_expires_at, role, email, mp_preapproval_id, mp_last_payment_id, nickname')
       .eq('id', userId)
       .single();
 
