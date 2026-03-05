@@ -140,5 +140,17 @@ export const dbService = {
       });
 
     if (error) console.error('Erro ao salvar resultado no Supabase:', error);
+  },
+
+  async loadUserProfile(userId: string) {
+    if (!supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('plan, plan_status, plan_source, plan_expires_at, role, email, mp_preapproval_id, mp_last_payment_id')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };

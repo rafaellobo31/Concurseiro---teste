@@ -81,11 +81,6 @@ class Database {
     if (index !== -1) {
       users[index] = { ...users[index], ...updates };
       
-      // Lógica de expiração PRO automática no banco
-      if (users[index].proExpiry && users[index].proExpiry < Date.now()) {
-        users[index].isPro = false;
-      }
-      
       this.saveUsers(users);
       return true;
     }

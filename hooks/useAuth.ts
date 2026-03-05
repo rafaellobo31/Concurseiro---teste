@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db } from '../services/db';
 import { supabase } from '../services/supabaseClient';
+import { dbService } from '../services/dbService';
 
 const SESSION_KEY = 'cp_active_session';
 
@@ -18,16 +19,15 @@ export const useAuth = () => {
       supabase.auth.getSession().then(({ data: { session } }) => {
         setSupabaseUser(session?.user ?? null);
         if (session?.user) {
-          const user = db.getUserByEmail(session.user.email!);
-          if (user) setCurrentUser(user);
+          refreshUser(session.user.id);
         }
       });
 
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
         setSupabaseUser(session?.user ?? null);
-        if (session?.user) {
-          refreshUser(session.user.email!);
-        } else {
+        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+          refreshUser(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
         }
       });
@@ -66,19 +66,17 @@ export const useAuth = () => {
     }
   };
 
-  const refreshUser = async (email?: string) => {
-    const targetEmail = email || currentUser?.email;
-    if (targetEmail) {
-      // Sincroniza com Supabase (Fonte da verdade para planos)
-      if (supabase) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', targetEmail)
-          .single();
+  const refreshUser = async (userIdOrEmail?: string) => {
+    const targetId = userIdOrEmail || supabaseUser?.id;
+    const targetEmail = currentUser?.email;
+
+    if (targetId && supabase) {
+      try {
+        const profile = await dbService.loadUserProfile(targetId);
 
         if (profile) {
-          db.updateUser(targetEmail, {
+          // Atualiza o banco local com os dados do Supabase
+          db.updateUser(profile.email, {
             isPro: profile.plan === 'pro',
             plan_status: profile.plan_status,
             plan_source: profile.plan_source,
@@ -86,22 +84,27 @@ export const useAuth = () => {
             mp_preapproval_id: profile.mp_preapproval_id,
             mp_last_payment_id: profile.mp_last_payment_id
           });
-        }
-      }
 
-      const user = db.getUserByEmail(targetEmail);
-      if (user) {
-        // Gating PIX expirado
-        if (user.plan_source === 'pix' && user.plan_expires_at) {
-          const expiry = new Date(user.plan_expires_at).getTime();
-          if (expiry < Date.now()) {
-            user.isPro = false;
-            user.plan_status = 'inactive';
-            db.updateUser(user.email, { isPro: false, plan_status: 'inactive' });
+          const user = db.getUserByEmail(profile.email);
+          if (user) {
+            // Gating PIX expirado (mantendo lógica existente se necessário, mas profile deve ser soberano)
+            if (user.plan_source === 'pix' && user.plan_expires_at) {
+              const expiry = new Date(user.plan_expires_at).getTime();
+              if (expiry < Date.now()) {
+                user.isPro = false;
+                user.plan_status = 'inactive';
+                db.updateUser(user.email, { isPro: false, plan_status: 'inactive' });
+              }
+            }
+            setCurrentUser(user);
           }
         }
-        setCurrentUser(user);
+      } catch (error) {
+        console.error("Erro ao carregar perfil do usuário:", error);
       }
+    } else if (targetEmail) {
+      const user = db.getUserByEmail(targetEmail);
+      if (user) setCurrentUser(user);
     }
   };
 
