@@ -21,15 +21,20 @@ export const useAuth = () => {
       }
 
       const initSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if ((import.meta as any).env.DEV) {
-          console.log("[Auth] Resultado getSession:", session ? "Sessão Ativa" : "Sem Sessão");
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if ((import.meta as any).env.DEV) {
+            console.log("[Auth] Resultado getSession:", session ? "Sessão Ativa" : "Sem Sessão");
+          }
+          setSupabaseUser(session?.user ?? null);
+          if (session?.user) {
+            await refreshUser(session.user.id);
+          }
+        } catch (err) {
+          console.error("[Auth] Erro ao inicializar sessão:", err);
+        } finally {
+          setIsHydrated(true);
         }
-        setSupabaseUser(session?.user ?? null);
-        if (session?.user) {
-          await refreshUser(session.user.id);
-        }
-        setIsHydrated(true);
       };
 
       initSession();
@@ -87,7 +92,20 @@ export const useAuth = () => {
 
     if (targetId && supabase) {
       try {
-        const profile = await dbService.loadUserProfile(targetId);
+        // Se targetId não for um UUID (contém @), busca por email primeiro ou ignora loadUserProfile
+        let profile = null;
+        if (targetId.includes('@')) {
+          // Se for email, tentamos buscar o perfil pelo email
+          const { data } = await supabase
+            .from('profiles')
+            .select('plan, plan_status, plan_source, plan_expires_at, role, email, mp_preapproval_id, mp_last_payment_id, nickname')
+            .eq('email', targetId)
+            .single();
+          profile = data;
+        } else {
+          // Se for UUID
+          profile = await dbService.loadUserProfile(targetId);
+        }
 
         if (profile) {
           let user = db.getUserByEmail(profile.email);

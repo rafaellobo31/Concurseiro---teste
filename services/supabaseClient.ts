@@ -15,7 +15,7 @@ function isHttpsUrl(v: string): boolean {
   }
 }
 
-const metaEnv = (import.meta as any).env;
+const metaEnv = (import.meta as any).env || {};
 const rawUrl = metaEnv.VITE_SUPABASE_URL;
 const rawAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY;
 
