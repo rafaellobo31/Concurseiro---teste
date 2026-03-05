@@ -1,3 +1,4 @@
+console.log("[Supabase] Carregando cliente...");
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type SupabaseInit = { ok: boolean; error?: string };

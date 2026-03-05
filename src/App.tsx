@@ -19,12 +19,13 @@ import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, Exa
 import { db } from './services/db';
 import { telemetry } from './services/telemetry';
 import { supabase } from './services/supabaseClient';
-import { normalizeAnswer, resolveToCanonical } from './utils';
+import { normalizeAnswer, resolveToCanonical } from './utils/commonUtils';
 import { useAuth } from './hooks/useAuth';
 import { useNavigation } from './hooks/useNavigation';
 import { useExam } from './hooks/useExam';
 
 const App: React.FC = () => {
+  console.log("[App] Renderizando componente principal...");
   const { 
     currentUser, 
     supabaseUser, 
@@ -135,7 +136,16 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isHydrated) return null;
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest animate-pulse">Iniciando Plataforma...</p>
+        </div>
+      </div>
+    );
+  }
 
   const userPlan: UserPlan = {
     isPro: currentUser?.isPro || false,

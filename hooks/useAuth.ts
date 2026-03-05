@@ -21,6 +21,13 @@ export const useAuth = () => {
       }
 
       const initSession = async () => {
+        const timeout = setTimeout(() => {
+          if (!isHydrated) {
+            console.warn("[Auth] Timeout na verificação de sessão. Forçando hidratação.");
+            setIsHydrated(true);
+          }
+        }, 5000); // 5 segundos de timeout
+
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if ((import.meta as any).env.DEV) {
@@ -33,6 +40,7 @@ export const useAuth = () => {
         } catch (err) {
           console.error("[Auth] Erro ao inicializar sessão:", err);
         } finally {
+          clearTimeout(timeout);
           setIsHydrated(true);
         }
       };

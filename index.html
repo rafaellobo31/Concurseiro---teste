@@ -9,6 +9,18 @@
     <!-- Shim Crítico para evitar erro de 'process is not defined' -->
     <script>
       window.process = window.process || { env: {} };
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        var message = [
+          'Message: ' + msg,
+          'URL: ' + url,
+          'Line: ' + lineNo,
+          'Column: ' + columnNo,
+          'Error object: ' + JSON.stringify(error)
+        ].join(' - ');
+        console.error(message);
+        // Opcional: alert(message); // Descomente para debug agressivo em mobile/produção
+        return false;
+      };
     </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -29,7 +41,17 @@
 <link rel="stylesheet" href="/index.css">
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <div id="root">
+        <div style="display: flex; min-height: 100vh; align-items: center; justify-content: center; background-color: #f8fafc; font-family: sans-serif;">
+            <div style="text-align: center;">
+                <div style="width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top: 4px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                <p style="color: #64748b; font-weight: bold; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;">Carregando Concurseiro Pro...</p>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script type="module" src="/src/index.tsx"></script>
 </body>
 </html>
