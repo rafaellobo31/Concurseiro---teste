@@ -135,16 +135,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-          <p className="font-black text-indigo-600 animate-pulse text-xs uppercase tracking-[0.2em]">Carregando Concurseiro...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!isHydrated) return null;
 
   const userPlan: UserPlan = {
     isPro: currentUser?.isPro || false,
