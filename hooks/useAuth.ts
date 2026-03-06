@@ -5,8 +5,6 @@ import { db } from '../services/db';
 import { supabase } from '../services/supabaseClient';
 import { dbService } from '../services/dbService';
 
-const SESSION_KEY = 'cp_active_session';
-
 export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [supabaseUser, setSupabaseUser] = useState<any>(null);
@@ -15,18 +13,25 @@ export const useAuth = () => {
   useEffect(() => {
     // Auth Supabase
     let subscription: any = null;
-    if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+    
+    const initAuth = async () => {
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
         setSupabaseUser(session?.user ?? null);
         if (session?.user) {
-          refreshUser(session.user.id);
+          await refreshUser(session.user.id);
         }
-      });
+      }
+      setIsHydrated(true);
+    };
 
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+    initAuth();
+
+    if (supabase) {
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
         setSupabaseUser(session?.user ?? null);
         if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          refreshUser(session.user.id);
+          await refreshUser(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
         }
@@ -34,7 +39,6 @@ export const useAuth = () => {
       subscription = sub;
     }
 
-    setIsHydrated(true);
     return () => {
       if (subscription) subscription.unsubscribe();
     };
@@ -49,7 +53,6 @@ export const useAuth = () => {
       await supabase.auth.signOut();
     }
     setCurrentUser(null);
-    localStorage.removeItem(SESSION_KEY);
   };
 
   const handleUpdateUser = (updates: Partial<User>) => {
@@ -68,14 +71,31 @@ export const useAuth = () => {
 
   const refreshUser = async (userIdOrEmail?: string) => {
     const targetId = userIdOrEmail || supabaseUser?.id;
-    const targetEmail = currentUser?.email;
-
+    
     if (targetId && supabase) {
       try {
-        const profile = await dbService.loadUserProfile(targetId);
+        // Se for um ID (UUID do Supabase), carrega o perfil
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+        
+        let profile;
+        if (isUUID) {
+          profile = await dbService.loadUserProfile(targetId);
+        } else {
+          // Se for e-mail, tenta achar o usuário no Supabase primeiro se possível, 
+          // mas loadUserProfile espera ID. Vamos assumir que refreshUser é chamado com ID quando logado via Supabase.
+          // Se tivermos currentUser, podemos usar o id do supabaseUser
+          if (supabaseUser?.id) {
+            profile = await dbService.loadUserProfile(supabaseUser.id);
+          } else {
+            // Se não temos ID, buscamos localmente pelo e-mail
+            const user = db.getUserByEmail(targetId);
+            if (user) setCurrentUser(user);
+            return;
+          }
+        }
 
         if (profile) {
-          // Atualiza o banco local com os dados do Supabase
+          // Sincroniza dados do plano do Supabase para o db local (compatibilidade)
           db.updateUser(profile.email, {
             isPro: profile.plan === 'pro',
             plan_status: profile.plan_status,
@@ -85,25 +105,39 @@ export const useAuth = () => {
             mp_last_payment_id: profile.mp_last_payment_id
           });
 
-          const user = db.getUserByEmail(profile.email);
-          if (user) {
-            // Gating PIX expirado (mantendo lógica existente se necessário, mas profile deve ser soberano)
-            if (user.plan_source === 'pix' && user.plan_expires_at) {
-              const expiry = new Date(user.plan_expires_at).getTime();
-              if (expiry < Date.now()) {
-                user.isPro = false;
-                user.plan_status = 'inactive';
-                db.updateUser(user.email, { isPro: false, plan_status: 'inactive' });
-              }
-            }
-            setCurrentUser(user);
+          let localUser = db.getUserByEmail(profile.email);
+          if (!localUser) {
+            db.register({
+              email: profile.email,
+              passwordHash: '', // Não temos a senha aqui, mas o auth é via Supabase
+              nickname: profile.email.split('@')[0],
+              isPro: profile.plan === 'pro',
+              favorites: [],
+              history: [],
+              savedPlans: []
+            });
+            localUser = db.getUserByEmail(profile.email);
+          }
+
+          if (localUser) {
+            // Garante que os dados do Supabase sobrescrevam o estado local para plano
+            const finalUser: User = {
+              ...localUser,
+              isPro: profile.plan === 'pro',
+              plan_status: profile.plan_status,
+              plan_source: profile.plan_source,
+              plan_expires_at: profile.plan_expires_at,
+              mp_preapproval_id: profile.mp_preapproval_id,
+              mp_last_payment_id: profile.mp_last_payment_id
+            };
+            setCurrentUser(finalUser);
           }
         }
       } catch (error) {
         console.error("Erro ao carregar perfil do usuário:", error);
       }
-    } else if (targetEmail) {
-      const user = db.getUserByEmail(targetEmail);
+    } else if (userIdOrEmail && !supabase) {
+      const user = db.getUserByEmail(userIdOrEmail);
       if (user) setCurrentUser(user);
     }
   };

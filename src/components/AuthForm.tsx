@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { supabase, supabaseInit } from '../services/supabaseClient';
 import { User } from '../types';
-import { hashPassword } from '../utils';
+import { hashPassword } from '../utils/commonUtils';
 
 interface AuthFormProps {
   onLogin: (user: User) => void;
@@ -80,8 +80,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         console.error("LOGIN_ERROR", loginError);
         setError(`${loginError.message}${loginError.status ? ` (Status: ${loginError.status})` : ''}`);
       } else if (data.user) {
-        // O onAuthStateChange no useAuth cuidará de carregar o perfil e setar o currentUser
-        // Mas para garantir compatibilidade imediata se necessário:
+        // Tenta buscar/criar o perfil local para compatibilidade
         let localUser = db.getUserByEmail(email);
         if (!localUser) {
           const hashed = await hashPassword(password);
@@ -122,9 +121,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         console.error("SIGNUP_ERROR", signUpError);
         setError(`${signUpError.message}${signUpError.status ? ` (Status: ${signUpError.status})` : ''}`);
       } else if (data.user) {
-        // Criar registro local para compatibilidade de histórico/favoritos
         const hashed = await hashPassword(password);
-        db.register({
+        const success = db.register({
           email,
           passwordHash: hashed,
           nickname,
