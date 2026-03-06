@@ -153,7 +153,7 @@ class Database {
     if (!user) return null;
     
     // Import dinâmico para evitar dependência circular se houver
-    const { hashPassword } = await import('../utils/commonUtils');
+    const { hashPassword } = await import('../utils');
     const hashed = await hashPassword(pass);
     
     if (user.passwordHash === hashed || user.passwordHash === pass) { // Mantém compatibilidade com senhas antigas não hashadas

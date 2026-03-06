@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Question, ModeloQuestao } from '../types';
-import { normalizeAnswer, resolveToCanonical } from '../utils/commonUtils';
+import { normalizeAnswer, resolveToCanonical } from '../utils';
 
 interface QuestionItemProps {
   question: Question;

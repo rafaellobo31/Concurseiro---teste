@@ -4,7 +4,7 @@ import { Exam, Question, Modalidade, ModeloQuestao, Nivel, User } from '../types
 import { generateExamQuestions, generateSubjectQuestions } from '../services/geminiService';
 import { dbService } from '../services/dbService';
 import { db } from '../services/db';
-import { normalizeAnswer, resolveToCanonical } from '../utils/commonUtils';
+import { normalizeAnswer, resolveToCanonical } from '../utils';
 
 export const useExam = (currentUser: User | null, supabaseUser: any, onShowProWall: (feature: string) => void) => {
   const [exam, setExam] = useState<Exam | null>(null);

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { supabase, supabaseInit } from '../services/supabaseClient';
 import { User } from '../types';
-import { hashPassword } from '../utils/commonUtils';
+import { hashPassword } from '../utils';
 
 interface AuthFormProps {
   onLogin: (user: User) => void;
