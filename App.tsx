@@ -135,22 +135,7 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (supabaseUser && view === 'auth') {
-      setView('home');
-    }
-  }, [supabaseUser, view]);
-
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-          <p className="font-black text-indigo-600 animate-pulse text-xs uppercase tracking-[0.2em]">Carregando Sessão...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!isHydrated) return null;
 
   const userPlan: UserPlan = {
     isPro: currentUser?.isPro || false,
@@ -191,7 +176,7 @@ const App: React.FC = () => {
     if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!supabaseUser} />;
     if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={onGenerateFromThermometer} onShowProWall={setProWallFeature} />;
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); onGenerateOrg(Modalidade.NACIONAL, name, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
-    if (view === 'assinatura_retorno') return <SubscriptionReturn onBack={() => handleViewChange('home')} currentUser={currentUser} refreshUser={refreshUser} />;
+    if (view === 'assinatura_retorno') return <SubscriptionReturn onBack={() => handleViewChange('home')} />;
 
     return (
       <div className="space-y-12 py-8">

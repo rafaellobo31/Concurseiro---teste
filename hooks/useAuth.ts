@@ -13,54 +13,28 @@ export const useAuth = () => {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
+    // Auth Supabase
     let subscription: any = null;
-    const isDev = (import.meta as any).env.DEV;
-
-    const initAuth = async () => {
-      if (!supabase) {
-        setIsHydrated(true);
-        return;
-      }
-
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (isDev) {
-          console.log("[Auth] getSession() no boot:", { session, error });
-          const token = localStorage.getItem('sb-' + (import.meta as any).env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
-          console.log("[Auth] Token no localStorage:", !!token);
-        }
-
-        if (session?.user) {
-          setSupabaseUser(session.user);
-          await refreshUser(session.user.id);
-        } else {
-          setSupabaseUser(null);
-          setCurrentUser(null);
-        }
-      } catch (err) {
-        console.error("[Auth] Erro na hidratação inicial:", err);
-      } finally {
-        if (isDev) console.log("[Auth] setIsHydrated(true) chamado");
-        setIsHydrated(true);
-      }
-
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (isDev) console.log("[Auth] onAuthStateChange:", event, session?.user?.email);
-        
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
         setSupabaseUser(session?.user ?? null);
-        
-        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
-          await refreshUser(session.user.id);
+        if (session?.user) {
+          refreshUser(session.user.id);
+        }
+      });
+
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+        setSupabaseUser(session?.user ?? null);
+        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+          refreshUser(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
         }
       });
       subscription = sub;
-    };
+    }
 
-    initAuth();
-
+    setIsHydrated(true);
     return () => {
       if (subscription) subscription.unsubscribe();
     };
@@ -93,29 +67,23 @@ export const useAuth = () => {
   };
 
   const refreshUser = async (userIdOrEmail?: string) => {
-    const isDev = (import.meta as any).env.DEV;
     const targetId = userIdOrEmail || supabaseUser?.id;
     const targetEmail = currentUser?.email;
 
     if (targetId && supabase) {
       try {
         const profile = await dbService.loadUserProfile(targetId);
-        if (isDev) console.log("[Auth] Perfil carregado:", profile);
 
         if (profile) {
-          // Atualiza o banco local com os dados do Supabase como fonte de verdade
-          const updates = {
+          // Atualiza o banco local com os dados do Supabase
+          db.updateUser(profile.email, {
             isPro: profile.plan === 'pro',
             plan_status: profile.plan_status,
             plan_source: profile.plan_source,
             plan_expires_at: profile.plan_expires_at,
             mp_preapproval_id: profile.mp_preapproval_id,
-            mp_last_payment_id: profile.mp_last_payment_id,
-            nickname: profile.nickname || profile.email.split('@')[0],
-            role: profile.role
-          };
-
-          db.updateUser(profile.email, updates);
+            mp_last_payment_id: profile.mp_last_payment_id
+          });
 
           const user = db.getUserByEmail(profile.email);
           if (user) {
@@ -132,7 +100,7 @@ export const useAuth = () => {
           }
         }
       } catch (error) {
-        console.error("[Auth] Erro ao carregar perfil do usuário:", error);
+        console.error("Erro ao carregar perfil do usuário:", error);
       }
     } else if (targetEmail) {
       const user = db.getUserByEmail(targetEmail);
