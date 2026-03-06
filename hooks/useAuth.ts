@@ -15,43 +15,81 @@ export const useAuth = () => {
   useEffect(() => {
     // Auth Supabase
     let subscription: any = null;
-    if (supabase) {
-      if ((import.meta as any).env.DEV) {
-        console.log("[Auth] Iniciando verificação de sessão...");
+    
+    // Timeout de segurança para garantir hidratação mesmo se o Supabase travar
+    const hydrationTimeout = setTimeout(() => {
+      if (!isHydrated) {
+        console.warn("[Auth] Timeout de hidratação atingido. Liberando UI...");
+        setIsHydrated(true);
       }
+    }, 5000);
+
+    if (supabase) {
+      console.log("[Auth] Iniciando verificação de sessão...");
 
       const initSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if ((import.meta as any).env.DEV) {
-          console.log("[Auth] Resultado getSession:", session ? "Sessão Ativa" : "Sem Sessão");
+        console.log("[Auth] Início do initAuth");
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error("[Auth] Erro no getSession:", error);
+            setCurrentUser(null);
+            setSupabaseUser(null);
+          } else {
+            const session = data?.session;
+            console.log("[Auth] Sucesso getSession:", session ? "Sessão Ativa" : "Sem Sessão");
+            setSupabaseUser(session?.user ?? null);
+            
+            if (session?.user) {
+              try {
+                await refreshUser(session.user.id);
+                console.log("[Auth] Sucesso refreshUser");
+              } catch (err) {
+                console.error("[Auth] Falha no refreshUser:", err);
+                setCurrentUser(null);
+              }
+            } else {
+              setCurrentUser(null);
+            }
+          }
+        } catch (err) {
+          console.error("[Auth] getSession falhou (exceção):", err);
+          setCurrentUser(null);
+          setSupabaseUser(null);
+        } finally {
+          console.log("[Auth] Finalizando hidratação (setIsHydrated(true))");
+          setIsHydrated(true);
+          clearTimeout(hydrationTimeout);
         }
-        setSupabaseUser(session?.user ?? null);
-        if (session?.user) {
-          await refreshUser(session.user.id);
-        }
-        setIsHydrated(true);
       };
 
       initSession();
 
       const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if ((import.meta as any).env.DEV) {
-          console.log("[Auth] Evento onAuthStateChange:", event);
-        }
+        console.log("[Auth] Evento onAuthStateChange:", event);
         setSupabaseUser(session?.user ?? null);
-        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
-          await refreshUser(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
+        
+        try {
+          if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+            await refreshUser(session.user.id);
+          } else if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+          }
+        } catch (err) {
+          console.error("[Auth] Erro no listener onAuthStateChange:", err);
         }
       });
       subscription = sub;
     } else {
+      console.log("[Auth] Supabase não disponível, liberando UI");
       setIsHydrated(true);
+      clearTimeout(hydrationTimeout);
     }
 
     return () => {
       if (subscription) subscription.unsubscribe();
+      clearTimeout(hydrationTimeout);
     };
   }, []);
 

@@ -1,3 +1,4 @@
+console.log("[Supabase] Carregando cliente...");
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type SupabaseInit = { ok: boolean; error?: string };
@@ -15,7 +16,7 @@ function isHttpsUrl(v: string): boolean {
   }
 }
 
-const metaEnv = (import.meta as any).env;
+const metaEnv = (import.meta as any).env || {};
 const rawUrl = metaEnv.VITE_SUPABASE_URL;
 const rawAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY;
 
