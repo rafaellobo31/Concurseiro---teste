@@ -1,13 +1,13 @@
 
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
 
 interface SubscriptionReturnProps {
   onBack: () => void;
+  currentUser: any;
+  refreshUser: (id?: string) => Promise<void>;
 }
 
-const SubscriptionReturn: React.FC<SubscriptionReturnProps> = ({ onBack }) => {
-  const { currentUser, refreshUser } = useAuth();
+const SubscriptionReturn: React.FC<SubscriptionReturnProps> = ({ onBack, currentUser, refreshUser }) => {
   const [isActivated, setIsActivated] = useState(false);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
