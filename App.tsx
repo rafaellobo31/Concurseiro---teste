@@ -1,28 +1,28 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import Header from '../components/Header';
-import LandingPage from '../components/LandingPage';
-import ExamForm from '../components/ExamForm';
-import SimuladosMateriasForm from '../components/SimuladosMateriasForm';
-import ThermometerView from '../components/ThermometerView';
-import QuestionItem from '../components/QuestionItem';
-import StudyMaterial from '../components/StudyMaterial';
-import PredictedConcursos from '../components/PredictedConcursos';
-import PricingModal from '../components/PricingModal';
-import AuthForm from '../components/AuthForm';
-import HistoryView from '../components/HistoryView';
-import UserProfile from '../components/UserProfile';
-import AdminDashboard from '../components/AdminDashboard';
-import UserAnalysisView from '../components/UserAnalysisView'; 
-import SubscriptionReturn from '../components/SubscriptionReturn';
-import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from '../types';
-import { db } from '../services/db';
-import { telemetry } from '../services/telemetry';
-import { supabase } from '../services/supabaseClient';
-import { normalizeAnswer, resolveToCanonical } from '../utils';
-import { useAuth } from '../hooks/useAuth';
-import { useNavigation } from '../hooks/useNavigation';
-import { useExam } from '../hooks/useExam';
+import Header from './components/Header';
+import LandingPage from './components/LandingPage';
+import ExamForm from './components/ExamForm';
+import SimuladosMateriasForm from './components/SimuladosMateriasForm';
+import ThermometerView from './components/ThermometerView';
+import QuestionItem from './components/QuestionItem';
+import StudyMaterial from './components/StudyMaterial';
+import PredictedConcursos from './components/PredictedConcursos';
+import PricingModal from './components/PricingModal';
+import AuthForm from './components/AuthForm';
+import HistoryView from './components/HistoryView';
+import UserProfile from './components/UserProfile';
+import AdminDashboard from './components/AdminDashboard';
+import UserAnalysisView from './components/UserAnalysisView'; 
+import SubscriptionReturn from './components/SubscriptionReturn';
+import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from './types';
+import { db } from './services/db';
+import { telemetry } from './services/telemetry';
+import { supabase } from './services/supabaseClient';
+import { normalizeAnswer, resolveToCanonical } from './utils';
+import { useAuth } from './hooks/useAuth';
+import { useNavigation } from './hooks/useNavigation';
+import { useExam } from './hooks/useExam';
 
 const App: React.FC = () => {
   const { 
@@ -43,12 +43,6 @@ const App: React.FC = () => {
     setProWallFeature,
     handleViewChange: baseHandleViewChange
   } = useNavigation(currentUser?.isPro || false);
-
-  useEffect(() => {
-    if (currentUser && view === 'auth') {
-      handleViewChange('home');
-    }
-  }, [currentUser, view]);
 
   const {
     exam,
