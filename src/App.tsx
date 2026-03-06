@@ -1,31 +1,30 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import Header from './components/Header';
-import LandingPage from './components/LandingPage';
-import ExamForm from './components/ExamForm';
-import SimuladosMateriasForm from './components/SimuladosMateriasForm';
-import ThermometerView from './components/ThermometerView';
-import QuestionItem from './components/QuestionItem';
-import StudyMaterial from './components/StudyMaterial';
-import PredictedConcursos from './components/PredictedConcursos';
-import PricingModal from './components/PricingModal';
-import AuthForm from './components/AuthForm';
-import HistoryView from './components/HistoryView';
-import UserProfile from './components/UserProfile';
-import AdminDashboard from './components/AdminDashboard';
-import UserAnalysisView from './components/UserAnalysisView'; 
-import SubscriptionReturn from './components/SubscriptionReturn';
-import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from './types';
-import { db } from './services/db';
-import { telemetry } from './services/telemetry';
-import { supabase } from './services/supabaseClient';
-import { normalizeAnswer, resolveToCanonical } from './utils/commonUtils';
-import { useAuth } from './hooks/useAuth';
-import { useNavigation } from './hooks/useNavigation';
-import { useExam } from './hooks/useExam';
+import Header from '../components/Header';
+import LandingPage from '../components/LandingPage';
+import ExamForm from '../components/ExamForm';
+import SimuladosMateriasForm from '../components/SimuladosMateriasForm';
+import ThermometerView from '../components/ThermometerView';
+import QuestionItem from '../components/QuestionItem';
+import StudyMaterial from '../components/StudyMaterial';
+import PredictedConcursos from '../components/PredictedConcursos';
+import PricingModal from '../components/PricingModal';
+import AuthForm from '../components/AuthForm';
+import HistoryView from '../components/HistoryView';
+import UserProfile from '../components/UserProfile';
+import AdminDashboard from '../components/AdminDashboard';
+import UserAnalysisView from '../components/UserAnalysisView'; 
+import SubscriptionReturn from '../components/SubscriptionReturn';
+import { Modalidade, ModeloQuestao, Question, Exam, AppView, UserPlan, User, ExamResult, StudyPlan, GroundingSource, ViewMode, Nivel } from '../types';
+import { db } from '../services/db';
+import { telemetry } from '../services/telemetry';
+import { supabase } from '../services/supabaseClient';
+import { normalizeAnswer, resolveToCanonical } from '../utils';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigation } from '../hooks/useNavigation';
+import { useExam } from '../hooks/useExam';
 
 const App: React.FC = () => {
-  console.log("[App] Renderizando componente principal...");
   const { 
     currentUser, 
     supabaseUser, 
@@ -44,6 +43,12 @@ const App: React.FC = () => {
     setProWallFeature,
     handleViewChange: baseHandleViewChange
   } = useNavigation(currentUser?.isPro || false);
+
+  useEffect(() => {
+    if (currentUser && view === 'auth') {
+      handleViewChange('home');
+    }
+  }, [currentUser, view]);
 
   const {
     exam,
@@ -136,16 +141,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest animate-pulse">Iniciando Plataforma...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!isHydrated) return null;
 
   const userPlan: UserPlan = {
     isPro: currentUser?.isPro || false,
