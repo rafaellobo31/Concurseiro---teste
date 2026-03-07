@@ -80,7 +80,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         console.error("LOGIN_ERROR", loginError);
         setError(`${loginError.message}${loginError.status ? ` (Status: ${loginError.status})` : ''}`);
       } else if (data.user) {
-        // Tenta buscar/criar o perfil local para compatibilidade
+        // O onAuthStateChange no useAuth cuidará de carregar o perfil e setar o currentUser
+        // Mas para garantir compatibilidade imediata se necessário:
         let localUser = db.getUserByEmail(email);
         if (!localUser) {
           const hashed = await hashPassword(password);
@@ -121,8 +122,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         console.error("SIGNUP_ERROR", signUpError);
         setError(`${signUpError.message}${signUpError.status ? ` (Status: ${signUpError.status})` : ''}`);
       } else if (data.user) {
+        // Criar registro local para compatibilidade de histórico/favoritos
         const hashed = await hashPassword(password);
-        const success = db.register({
+        db.register({
           email,
           passwordHash: hashed,
           nickname,

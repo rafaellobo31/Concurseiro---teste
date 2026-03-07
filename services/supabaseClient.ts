@@ -30,7 +30,12 @@ if (!isNonEmptyString(rawUrl)) {
   supabaseInit = { ok: false, error: '[Supabase] VITE_SUPABASE_ANON_KEY ausente.' };
 } else {
   supabase = createClient(rawUrl.trim(), rawAnonKey.trim(), {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    auth: { 
+      persistSession: true, 
+      autoRefreshToken: true, 
+      detectSessionInUrl: true,
+      storage: window.localStorage
+    },
   });
 }
 

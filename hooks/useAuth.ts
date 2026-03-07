@@ -13,28 +13,37 @@ export const useAuth = () => {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    // Auth Supabase
     let subscription: any = null;
-    if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setSupabaseUser(session?.user ?? null);
-        if (session?.user) {
-          refreshUser(session.user.id);
-        }
-      });
 
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
-        setSupabaseUser(session?.user ?? null);
-        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          refreshUser(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
-        }
-      });
-      subscription = sub;
-    }
+    const initAuth = async () => {
+      if (supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          setSupabaseUser(session?.user ?? null);
+          
+          if (session?.user) {
+            await refreshUser(session.user.id);
+          }
 
-    setIsHydrated(true);
+          const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            setSupabaseUser(session?.user ?? null);
+            
+            if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+              await refreshUser(session.user.id);
+            } else if (event === 'SIGNED_OUT') {
+              setCurrentUser(null);
+            }
+          });
+          subscription = sub;
+        } catch (error) {
+          console.error("Erro na inicialização do auth:", error);
+        }
+      }
+      setIsHydrated(true);
+    };
+
+    initAuth();
+
     return () => {
       if (subscription) subscription.unsubscribe();
     };
@@ -75,17 +84,38 @@ export const useAuth = () => {
         const profile = await dbService.loadUserProfile(targetId);
 
         if (profile) {
-          // Atualiza o banco local com os dados do Supabase
-          db.updateUser(profile.email, {
-            isPro: profile.plan === 'pro',
-            plan_status: profile.plan_status,
-            plan_source: profile.plan_source,
-            plan_expires_at: profile.plan_expires_at,
-            mp_preapproval_id: profile.mp_preapproval_id,
-            mp_last_payment_id: profile.mp_last_payment_id
-          });
+          let user = db.getUserByEmail(profile.email);
+          
+          if (!user) {
+            // Se o usuário existe no Supabase mas não no banco local (ex: após limpar cache), registra localmente
+            db.register({
+              email: profile.email,
+              passwordHash: 'supabase_auth', // Marcador para indicar que a senha é gerenciada pelo Supabase
+              nickname: profile.email.split('@')[0],
+              isPro: profile.plan === 'pro',
+              plan_status: profile.plan_status,
+              plan_source: profile.plan_source,
+              plan_expires_at: profile.plan_expires_at,
+              mp_preapproval_id: profile.mp_preapproval_id,
+              mp_last_payment_id: profile.mp_last_payment_id,
+              favorites: [],
+              history: [],
+              savedPlans: []
+            });
+            user = db.getUserByEmail(profile.email);
+          } else {
+            // Atualiza o banco local com os dados do Supabase
+            db.updateUser(profile.email, {
+              isPro: profile.plan === 'pro',
+              plan_status: profile.plan_status,
+              plan_source: profile.plan_source,
+              plan_expires_at: profile.plan_expires_at,
+              mp_preapproval_id: profile.mp_preapproval_id,
+              mp_last_payment_id: profile.mp_last_payment_id
+            });
+            user = db.getUserByEmail(profile.email);
+          }
 
-          const user = db.getUserByEmail(profile.email);
           if (user) {
             // Gating PIX expirado (mantendo lógica existente se necessário, mas profile deve ser soberano)
             if (user.plan_source === 'pix' && user.plan_expires_at) {
