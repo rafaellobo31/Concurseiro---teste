@@ -185,7 +185,7 @@ const App: React.FC = () => {
     if (view === 'material') return <StudyMaterial userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onSavePlan={handleSaveStudyPlan} isLoggedIn={!!supabaseUser} />;
     if (view === 'termometro') return <ThermometerView userPlan={userPlan} onUpgrade={() => handleViewChange('planos')} onGenerateExam={onGenerateFromThermometer} onShowProWall={setProWallFeature} />;
     if (view === 'previstos') return <PredictedConcursos onStudy={(name) => { handleViewChange('simulado'); onGenerateOrg(Modalidade.NACIONAL, name, "", "Geral", ModeloQuestao.MULTIPLA_ESCOLHA, 3, ""); }} />;
-    if (view === 'assinatura_retorno') return <SubscriptionReturn onBack={() => handleViewChange('home')} />;
+    if (view === 'assinatura_retorno') return <SubscriptionReturn onBack={() => handleViewChange('home')} currentUser={currentUser} refreshUser={refreshUser} />;
 
     return (
       <div className="space-y-12 py-8">

@@ -1,0 +1,15 @@
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Merriweather", serif;
+}
+
+body {
+  @apply bg-[#f8fafc] text-slate-900;
+}
+
+.exam-font {
+  font-family: theme('fontSerif');
+}
