@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+// Persisted structure
 import Header from './components/Header';
 import LandingPage from './components/LandingPage';
 import ExamForm from './components/ExamForm';
