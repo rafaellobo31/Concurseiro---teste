@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-// Persisted structure
 import { Exam, Question, Modalidade, ModeloQuestao, Nivel, User } from '../types';
 import { generateExamQuestions, generateSubjectQuestions } from '../services/geminiService';
 import { dbService } from '../services/dbService';
