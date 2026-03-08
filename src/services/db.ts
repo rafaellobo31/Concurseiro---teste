@@ -1,6 +1,6 @@
 
 import { User, ExamResult, Question, StudyPlan } from '../types';
-// Persisted structure
+
 const DB_KEY = 'concurseiro_pro_db_v1';
 
 class Database {

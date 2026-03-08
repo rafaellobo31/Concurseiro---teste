@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-// Persisted structure
+
 export type SupabaseInit = { ok: boolean; error?: string };
 
 function isNonEmptyString(v: unknown): v is string {
