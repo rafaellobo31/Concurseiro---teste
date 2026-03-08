@@ -1,6 +1,5 @@
 
 import React from 'react';
-// Persisted structure
 import { AppView } from '../types';
 
 // Interface defining the props for the LandingPage component

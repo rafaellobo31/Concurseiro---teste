@@ -1,6 +1,5 @@
 
 import { supabase } from './supabaseClient';
-// Persisted structure
 import { Question } from '../types';
 
 export interface DbSimulado {

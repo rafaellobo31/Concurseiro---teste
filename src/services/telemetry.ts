@@ -1,6 +1,6 @@
 
 const TELEMETRY_KEY = 'cpro_telemetry_logs';
-// Persisted structure
+
 export interface TelemetryLog {
   id: string;
   timestamp: number;

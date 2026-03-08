@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// Persisted structure
 import { telemetry, TelemetryLog } from '../services/telemetry';
 
 const AdminDashboard: React.FC = () => {

@@ -33,9 +33,6 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       {/* Cabeçalho da Questão */}
       <div className="flex justify-between items-start mb-6">
         <div className="flex flex-col gap-1">
-          <h3 className="text-xs font-black text-slate-900 uppercase tracking-tight mb-1">
-            Concurso {question.banca} - {question.ano}
-          </h3>
           <div className="flex items-center gap-2">
             <span className="bg-indigo-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-sm">
               Questão {index + 1}

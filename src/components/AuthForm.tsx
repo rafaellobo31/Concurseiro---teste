@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// Persisted structure
 import { db } from '../services/db';
 import { supabase, supabaseInit } from '../services/supabaseClient';
 import { User } from '../types';
