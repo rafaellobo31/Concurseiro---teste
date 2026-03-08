@@ -65,7 +65,26 @@ const App: React.FC = () => {
   } = useExam(currentUser, supabaseUser, setProWallFeature);
 
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('cp_theme') as 'light' | 'dark' || 'light';
+    }
+    return 'light';
+  });
   const examRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('cp_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   const handleViewChange = (newView: AppView | 'admin') => {
     baseHandleViewChange(newView, resetExam);
@@ -297,8 +316,16 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-[#f8fafc] transition-all duration-500`}>
-      <Header userPlan={userPlan} currentView={view as AppView} currentUser={currentUser} onViewChange={handleViewChange} onLogout={handleLogout} />
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'} transition-all duration-500`}>
+      <Header 
+        userPlan={userPlan} 
+        currentView={view as AppView} 
+        currentUser={currentUser} 
+        onViewChange={handleViewChange} 
+        onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
       <main className={`max-w-7xl mx-auto px-4 pb-20 pt-8`}>
         {proWallFeature && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
