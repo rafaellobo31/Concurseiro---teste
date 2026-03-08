@@ -1,6 +1,5 @@
 
 import React from 'react';
-// Persisted structure
 import { AppView, UserPlan, User } from '../types';
 
 interface HeaderProps {

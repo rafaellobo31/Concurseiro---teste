@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-// Persisted structure
 import { Modalidade, ModeloQuestao, Nivel } from '../types';
 import { catalogService, ContestCatalog } from '../services/catalogService';
 
