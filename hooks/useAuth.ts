@@ -32,18 +32,14 @@ export const useAuth = () => {
               await refreshUser(session.user.id);
             } else if (event === 'SIGNED_OUT') {
               setCurrentUser(null);
-              localStorage.removeItem(SESSION_KEY);
             }
           });
           subscription = sub;
         } catch (error) {
           console.error("Erro na inicialização do auth:", error);
-        } finally {
-          setIsHydrated(true);
         }
-      } else {
-        setIsHydrated(true);
       }
+      setIsHydrated(true);
     };
 
     initAuth();
@@ -91,10 +87,11 @@ export const useAuth = () => {
           let user = db.getUserByEmail(profile.email);
           
           if (!user) {
+            // Se o usuário existe no Supabase mas não no banco local (ex: após limpar cache), registra localmente
             db.register({
               email: profile.email,
-              passwordHash: 'supabase_auth',
-              nickname: profile.nickname || profile.email.split('@')[0],
+              passwordHash: 'supabase_auth', // Marcador para indicar que a senha é gerenciada pelo Supabase
+              nickname: profile.email.split('@')[0],
               isPro: profile.plan === 'pro',
               plan_status: profile.plan_status,
               plan_source: profile.plan_source,
@@ -107,6 +104,7 @@ export const useAuth = () => {
             });
             user = db.getUserByEmail(profile.email);
           } else {
+            // Atualiza o banco local com os dados do Supabase
             db.updateUser(profile.email, {
               isPro: profile.plan === 'pro',
               plan_status: profile.plan_status,
@@ -119,6 +117,7 @@ export const useAuth = () => {
           }
 
           if (user) {
+            // Gating PIX expirado (mantendo lógica existente se necessário, mas profile deve ser soberano)
             if (user.plan_source === 'pix' && user.plan_expires_at) {
               const expiry = new Date(user.plan_expires_at).getTime();
               if (expiry < Date.now()) {
@@ -131,29 +130,7 @@ export const useAuth = () => {
           }
         }
       } catch (error) {
-        console.warn("Perfil não encontrado no Supabase, tentando recuperar do banco local ou sessão:", error);
-        
-        // Fallback: Tenta recuperar do banco local se tivermos o e-mail da sessão
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.email) {
-          const user = db.getUserByEmail(session.user.email);
-          if (user) {
-            setCurrentUser(user);
-          } else {
-            // Se não tem no banco local, cria um básico a partir da sessão
-            const newUser: User = {
-              email: session.user.email,
-              passwordHash: 'supabase_auth',
-              nickname: session.user.user_metadata?.nickname || session.user.email.split('@')[0],
-              isPro: false,
-              favorites: [],
-              history: [],
-              savedPlans: []
-            };
-            db.register(newUser);
-            setCurrentUser(newUser);
-          }
-        }
+        console.error("Erro ao carregar perfil do usuário:", error);
       }
     } else if (targetEmail) {
       const user = db.getUserByEmail(targetEmail);

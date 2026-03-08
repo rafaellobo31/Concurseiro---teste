@@ -2,18 +2,9 @@
 import { useState, useEffect } from 'react';
 import { AppView } from '../types';
 
-const VIEW_STORAGE_KEY = 'cp_current_view';
-
 export const useNavigation = (isPro: boolean) => {
-  const [view, setView] = useState<AppView | 'admin'>(() => {
-    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
-    return (saved as AppView) || 'home';
-  });
+  const [view, setView] = useState<AppView | 'admin'>('home');
   const [proWallFeature, setProWallFeature] = useState<string | null>(null);
-
-  useEffect(() => {
-    localStorage.setItem(VIEW_STORAGE_KEY, view);
-  }, [view]);
 
   useEffect(() => {
     const handleAdminSecret = (e: KeyboardEvent) => {
